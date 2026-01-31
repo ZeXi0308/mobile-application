@@ -15,8 +15,7 @@ import javax.inject.Singleton
  * 语音聊天管理器
  * 使用Agora SDK实现实时语音通话
  */
-@Singleton
-class VoiceChatManager @Inject constructor(
+class VoiceChatManager(
     private val context: Context
 ) {
     private var rtcEngine: RtcEngine? = null
