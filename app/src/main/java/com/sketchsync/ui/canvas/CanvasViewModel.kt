@@ -184,9 +184,31 @@ class CanvasViewModel @Inject constructor(
         val roomId = currentRoomId ?: return
         val userId = currentUserId ?: return
         
+        _uiState.value = _uiState.value.copy(isVoiceConnecting = true)
+        
+        // 设置监听器
+        voiceChatManager.setOnJoinChannelSuccessListener { channel, uid ->
+            _uiState.value = _uiState.value.copy(
+                isVoiceEnabled = true,
+                isVoiceConnecting = false,
+                message = "语音聊天已连接"
+            )
+        }
+        
+        voiceChatManager.setOnErrorListener { err, msg ->
+            _uiState.value = _uiState.value.copy(
+                isVoiceEnabled = false,
+                isVoiceConnecting = false,
+                error = "语音错误: $msg ($err)"
+            )
+        }
+        
         val success = voiceChatManager.joinChannel(roomId, userId.hashCode())
-        if (success) {
-            _uiState.value = _uiState.value.copy(isVoiceEnabled = true)
+        if (!success) {
+            _uiState.value = _uiState.value.copy(
+                isVoiceConnecting = false,
+                error = "无法初始化语音引擎"
+            )
         }
     }
     
@@ -287,6 +309,7 @@ data class CanvasUiState(
     val currentColor: Int = android.graphics.Color.BLACK,
     val currentStrokeWidth: Float = 8f,
     val isVoiceEnabled: Boolean = false,
+    val isVoiceConnecting: Boolean = false,
     val isMuted: Boolean = false,
     val isExporting: Boolean = false,
     val exportedImageUrl: String? = null,

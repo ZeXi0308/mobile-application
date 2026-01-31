@@ -24,6 +24,7 @@ class VoiceChatManager @Inject constructor(
     private var isMuted = false
     private var currentChannel: String? = null
     
+    private var onJoinChannelSuccessListener: ((String, Int) -> Unit)? = null
     private var onUserJoinedListener: ((Int) -> Unit)? = null
     private var onUserLeftListener: ((Int) -> Unit)? = null
     private var onErrorListener: ((Int, String) -> Unit)? = null
@@ -32,6 +33,7 @@ class VoiceChatManager @Inject constructor(
         override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
             Log.d(TAG, "Join channel success: $channel, uid: $uid")
             currentChannel = channel
+            onJoinChannelSuccessListener?.invoke(channel, uid)
         }
         
         override fun onUserJoined(uid: Int, elapsed: Int) {
@@ -158,6 +160,10 @@ class VoiceChatManager @Inject constructor(
     /**
      * 设置监听器
      */
+    fun setOnJoinChannelSuccessListener(listener: (String, Int) -> Unit) {
+        onJoinChannelSuccessListener = listener
+    }
+
     fun setOnUserJoinedListener(listener: (Int) -> Unit) {
         onUserJoinedListener = listener
     }

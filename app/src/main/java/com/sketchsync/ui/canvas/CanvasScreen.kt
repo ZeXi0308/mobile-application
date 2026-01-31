@@ -181,7 +181,7 @@ fun CanvasScreen(
                         onClick = {
                             if (uiState.isVoiceEnabled) {
                                 viewModel.toggleMute()
-                            } else {
+                            } else if (!uiState.isVoiceConnecting) {
                                 if (ContextCompat.checkSelfPermission(
                                         context,
                                         Manifest.permission.RECORD_AUDIO
@@ -194,13 +194,21 @@ fun CanvasScreen(
                             }
                         }
                     ) {
-                        Icon(
-                            imageVector = if (uiState.isMuted || !uiState.isVoiceEnabled) 
-                                Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = "语音",
-                            tint = if (uiState.isVoiceEnabled && !uiState.isMuted) 
-                                Color(0xFF4CAF50) else Color.Gray
-                        )
+                        if (uiState.isVoiceConnecting) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = PrimaryBlue,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (uiState.isMuted || !uiState.isVoiceEnabled) 
+                                    Icons.Default.MicOff else Icons.Default.Mic,
+                                contentDescription = "语音",
+                                tint = if (uiState.isVoiceEnabled && !uiState.isMuted) 
+                                    Color(0xFF4CAF50) else Color.Gray
+                            )
+                        }
                     }
                     
                     // 保存按钮
