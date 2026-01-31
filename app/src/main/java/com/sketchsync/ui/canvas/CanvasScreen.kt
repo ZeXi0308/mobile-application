@@ -179,18 +179,26 @@ fun CanvasScreen(
                     // 语音按钮
                     IconButton(
                         onClick = {
+                            android.util.Log.d("CanvasScreen", "Voice button clicked! isVoiceEnabled=${uiState.isVoiceEnabled}, isVoiceConnecting=${uiState.isVoiceConnecting}")
                             if (uiState.isVoiceEnabled) {
+                                android.util.Log.d("CanvasScreen", "Toggling mute")
                                 viewModel.toggleMute()
                             } else if (!uiState.isVoiceConnecting) {
-                                if (ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.RECORD_AUDIO
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                ) {
+                                val hasPermission = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO
+                                ) == PackageManager.PERMISSION_GRANTED
+                                android.util.Log.d("CanvasScreen", "Has mic permission: $hasPermission")
+                                
+                                if (hasPermission) {
+                                    android.util.Log.d("CanvasScreen", "Calling joinVoiceChannel()")
                                     viewModel.joinVoiceChannel()
                                 } else {
+                                    android.util.Log.d("CanvasScreen", "Requesting mic permission")
                                     micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 }
+                            } else {
+                                android.util.Log.d("CanvasScreen", "Already connecting, ignoring click")
                             }
                         }
                     ) {
