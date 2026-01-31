@@ -215,13 +215,6 @@ class DrawingCanvas @JvmOverloads constructor(
                         translateY += y - lastPanY
                         lastPanX = x
                         lastPanY = y
-                        
-                        // 限制平移范围，确保不会平移到画布外
-                        val maxTranslateX = width * (scaleFactor - 1) / scaleFactor
-                        val maxTranslateY = height * (scaleFactor - 1) / scaleFactor
-                        translateX = translateX.coerceIn(-maxTranslateX, maxTranslateX)
-                        translateY = translateY.coerceIn(-maxTranslateY, maxTranslateY)
-                        
                         invalidate()
                     }
                     return true
