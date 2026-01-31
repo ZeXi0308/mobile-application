@@ -376,8 +376,8 @@ class DrawingCanvas @JvmOverloads constructor(
                     path.addCircle(start.x, start.y, radius, Path.Direction.CW)
                 }
             }
-            DrawTool.TEXT -> {
-                // 文字工具需要特殊处理
+            DrawTool.TEXT, DrawTool.PAN -> {
+                // 文字工具需要特殊处理，PAN不创建路径
             }
         }
         

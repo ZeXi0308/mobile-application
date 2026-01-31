@@ -447,13 +447,64 @@ fun ToolBar(
                 contentDescription = "圆形"
             )
             
-            // 拖拽/平移
-            ToolButton(
-                icon = Icons.Default.PanTool,
-                selected = currentTool == DrawTool.PAN,
-                onClick = { onToolSelected(DrawTool.PAN) },
-                contentDescription = "拖拽"
-            )
+            // 拖拽/平移 (使用自定义图标)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (currentTool == DrawTool.PAN) PrimaryBlue.copy(alpha = 0.2f)
+                        else Color.Transparent
+                    )
+                    .clickable { onToolSelected(DrawTool.PAN) },
+                contentAlignment = Alignment.Center
+            ) {
+                // 绘制十字箭头表示移动
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // 上箭头
+                    Box(
+                        modifier = Modifier
+                            .width(2.dp)
+                            .height(8.dp)
+                            .background(if (currentTool == DrawTool.PAN) PrimaryBlue else Color.Gray)
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 左箭头
+                        Box(
+                            modifier = Modifier
+                                .width(8.dp)
+                                .height(2.dp)
+                                .background(if (currentTool == DrawTool.PAN) PrimaryBlue else Color.Gray)
+                        )
+                        // 中心点
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .background(if (currentTool == DrawTool.PAN) PrimaryBlue else Color.Gray)
+                        )
+                        // 右箭头
+                        Box(
+                            modifier = Modifier
+                                .width(8.dp)
+                                .height(2.dp)
+                                .background(if (currentTool == DrawTool.PAN) PrimaryBlue else Color.Gray)
+                        )
+                    }
+                    // 下箭头
+                    Box(
+                        modifier = Modifier
+                            .width(2.dp)
+                            .height(8.dp)
+                            .background(if (currentTool == DrawTool.PAN) PrimaryBlue else Color.Gray)
+                    )
+                }
+            }
             
             Spacer(modifier = Modifier.width(8.dp))
             
