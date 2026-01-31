@@ -85,7 +85,7 @@ class VoiceChatManager(
         return try {
             Log.d(TAG, "Creating RtcEngineConfig...")
             val config = RtcEngineConfig().apply {
-                mContext = context.applicationContext
+                mContext = com.sketchsync.SketchSyncApplication.appContext
                 mAppId = appId
                 mEventHandler = eventHandler
             }
