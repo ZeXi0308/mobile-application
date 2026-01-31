@@ -89,6 +89,7 @@ fun CanvasScreen(
     val room by viewModel.room.collectAsState()
     val remotePaths by viewModel.remotePaths.collectAsState()
     val cursors by viewModel.cursors.collectAsState()
+    val clearEvent by viewModel.clearEvent.collectAsState()
     val context = LocalContext.current
     
     var drawingCanvas by remember { mutableStateOf<DrawingCanvas?>(null) }
@@ -125,6 +126,16 @@ fun CanvasScreen(
                 drawingCanvas?.addRemotePath(path)
                 renderedPathIds.add(path.id)
             }
+        }
+    }
+    
+    // 监听清空事件
+    var lastClearTime by remember { mutableStateOf(0L) }
+    LaunchedEffect(clearEvent) {
+        if (clearEvent > lastClearTime && clearEvent > 0) {
+            drawingCanvas?.clear()
+            renderedPathIds.clear()
+            lastClearTime = clearEvent
         }
     }
     

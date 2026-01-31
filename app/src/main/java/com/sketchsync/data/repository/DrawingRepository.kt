@@ -124,15 +124,43 @@ class DrawingRepository @Inject constructor(
     }
     
     /**
-     * 清空画布
+     * 清空画布（同时通知其他用户）
      */
     suspend fun clearCanvas(roomId: String): Result<Unit> {
         return try {
+            // 删除所有路径
             roomsRef.child(roomId).child("paths").removeValue().await()
+            // 发送清空事件
+            roomsRef.child(roomId).child("clearEvent").setValue(
+                mapOf("timestamp" to System.currentTimeMillis())
+            ).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+    
+    /**
+     * 监听画布清空事件
+     */
+    fun observeClearEvents(roomId: String): Flow<Long> = callbackFlow {
+        val clearRef = roomsRef.child(roomId).child("clearEvent")
+        
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val timestamp = (snapshot.child("timestamp").value as? Number)?.toLong() ?: 0L
+                if (timestamp > 0) {
+                    trySend(timestamp)
+                }
+            }
+            
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        }
+        
+        clearRef.addValueEventListener(listener)
+        awaitClose { clearRef.removeEventListener(listener) }
     }
     
     /**

@@ -45,6 +45,10 @@ class CanvasViewModel @Inject constructor(
     private val _cursors = MutableStateFlow<Map<String, Pair<Float, Float>>>(emptyMap())
     val cursors: StateFlow<Map<String, Pair<Float, Float>>> = _cursors.asStateFlow()
     
+    // 清空事件（其他用户清空画布时触发）
+    private val _clearEvent = MutableStateFlow(0L)
+    val clearEvent: StateFlow<Long> = _clearEvent.asStateFlow()
+    
     // 当前用户信息
     val currentUserId: String? get() = authRepository.currentUserId
     
@@ -70,6 +74,9 @@ class CanvasViewModel @Inject constructor(
             
             // 开始监听光标
             startCursorSync(roomId)
+            
+            // 开始监听清空事件
+            startClearEventSync(roomId)
         }
     }
     
@@ -112,6 +119,20 @@ class CanvasViewModel @Inject constructor(
                         _cursors.value = cursors
                     }
             }
+        }
+    }
+    
+    /**
+     * 开始监听清空事件
+     */
+    private fun startClearEventSync(roomId: String) {
+        viewModelScope.launch {
+            drawingRepository.observeClearEvents(roomId)
+                .catch { /* 忽略错误 */ }
+                .collect { timestamp ->
+                    _clearEvent.value = timestamp
+                    _remotePaths.value = emptyList()
+                }
         }
     }
     
