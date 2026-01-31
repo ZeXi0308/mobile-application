@@ -24,6 +24,9 @@ class VoiceChatManager @Inject constructor(
     private var isMuted = false
     private var currentChannel: String? = null
     
+    // 主线程Handler用于UI回调
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    
     private var onJoinChannelSuccessListener: ((String, Int) -> Unit)? = null
     private var onUserJoinedListener: ((Int) -> Unit)? = null
     private var onUserLeftListener: ((Int) -> Unit)? = null
@@ -33,22 +36,30 @@ class VoiceChatManager @Inject constructor(
         override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
             Log.d(TAG, "Join channel success: $channel, uid: $uid")
             currentChannel = channel
-            onJoinChannelSuccessListener?.invoke(channel, uid)
+            mainHandler.post {
+                onJoinChannelSuccessListener?.invoke(channel, uid)
+            }
         }
         
         override fun onUserJoined(uid: Int, elapsed: Int) {
             Log.d(TAG, "User joined: $uid")
-            onUserJoinedListener?.invoke(uid)
+            mainHandler.post {
+                onUserJoinedListener?.invoke(uid)
+            }
         }
         
         override fun onUserOffline(uid: Int, reason: Int) {
             Log.d(TAG, "User offline: $uid, reason: $reason")
-            onUserLeftListener?.invoke(uid)
+            mainHandler.post {
+                onUserLeftListener?.invoke(uid)
+            }
         }
         
         override fun onError(err: Int) {
             Log.e(TAG, "Agora error: $err")
-            onErrorListener?.invoke(err, getErrorMessage(err))
+            mainHandler.post {
+                onErrorListener?.invoke(err, getErrorMessage(err))
+            }
         }
         
         override fun onLeaveChannel(stats: RtcStats?) {

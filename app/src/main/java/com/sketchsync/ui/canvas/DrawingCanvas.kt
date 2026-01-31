@@ -443,8 +443,22 @@ class DrawingCanvas @JvmOverloads constructor(
      * 设置绘图工具
      */
     fun setTool(tool: DrawTool) {
+        // 如果从PAN模式切换到其他模式，重置平移和缩放
+        if (currentTool == DrawTool.PAN && tool != DrawTool.PAN) {
+            resetPanZoom()
+        }
         currentTool = tool
         isEraser = tool == DrawTool.ERASER
+    }
+    
+    /**
+     * 重置平移和缩放
+     */
+    fun resetPanZoom() {
+        translateX = 0f
+        translateY = 0f
+        scaleFactor = 1f
+        invalidate()
     }
     
     /**
