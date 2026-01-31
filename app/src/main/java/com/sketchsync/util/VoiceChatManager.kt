@@ -72,22 +72,29 @@ class VoiceChatManager @Inject constructor(
      * 初始化Agora引擎
      */
     fun initialize(): Boolean {
+        Log.d(TAG, "initialize() called, isInitialized=$isInitialized")
         if (isInitialized) return true
         
         val appId = BuildConfig.AGORA_APP_ID
+        Log.d(TAG, "AGORA_APP_ID: ${if (appId.isBlank()) "EMPTY!" else appId.take(8) + "..."}")
+        
         if (appId.isBlank()) {
-            Log.e(TAG, "Agora App ID is empty")
+            Log.e(TAG, "Agora App ID is empty - check local.properties")
             return false
         }
         
         return try {
+            Log.d(TAG, "Creating RtcEngineConfig...")
             val config = RtcEngineConfig().apply {
                 mContext = context.applicationContext
                 mAppId = appId
                 mEventHandler = eventHandler
             }
             
+            Log.d(TAG, "Creating RtcEngine...")
             rtcEngine = RtcEngine.create(config)
+            
+            Log.d(TAG, "Configuring audio settings...")
             rtcEngine?.apply {
                 enableAudio()
                 setChannelProfile(Constants.CHANNEL_PROFILE_COMMUNICATION)
@@ -101,7 +108,7 @@ class VoiceChatManager @Inject constructor(
             Log.d(TAG, "Agora initialized successfully")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize Agora: ${e.message}")
+            Log.e(TAG, "Failed to initialize Agora: ${e.message}", e)
             false
         }
     }
@@ -110,8 +117,14 @@ class VoiceChatManager @Inject constructor(
      * 加入语音频道
      */
     fun joinChannel(channelId: String, userId: Int): Boolean {
+        Log.d(TAG, "joinChannel() called: channelId=$channelId, userId=$userId")
+        
         if (!isInitialized) {
-            if (!initialize()) return false
+            Log.d(TAG, "Not initialized, calling initialize()...")
+            if (!initialize()) {
+                Log.e(TAG, "initialize() failed")
+                return false
+            }
         }
         
         return try {
@@ -121,10 +134,12 @@ class VoiceChatManager @Inject constructor(
                 clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
             }
             
+            Log.d(TAG, "Calling rtcEngine?.joinChannel()...")
             val result = rtcEngine?.joinChannel(null, channelId, userId, options)
+            Log.d(TAG, "joinChannel returned: $result")
             result == 0
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to join channel: ${e.message}")
+            Log.e(TAG, "Failed to join channel: ${e.message}", e)
             false
         }
     }
