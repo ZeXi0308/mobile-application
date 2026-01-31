@@ -215,6 +215,13 @@ class DrawingCanvas @JvmOverloads constructor(
                         translateY += y - lastPanY
                         lastPanX = x
                         lastPanY = y
+                        
+                        // 限制平移范围，确保不会平移到画布外
+                        val maxTranslateX = width * (scaleFactor - 1) / scaleFactor
+                        val maxTranslateY = height * (scaleFactor - 1) / scaleFactor
+                        translateX = translateX.coerceIn(-maxTranslateX, maxTranslateX)
+                        translateY = translateY.coerceIn(-maxTranslateY, maxTranslateY)
+                        
                         invalidate()
                     }
                     return true
@@ -443,10 +450,6 @@ class DrawingCanvas @JvmOverloads constructor(
      * 设置绘图工具
      */
     fun setTool(tool: DrawTool) {
-        // 如果从PAN模式切换到其他模式，重置平移和缩放
-        if (currentTool == DrawTool.PAN && tool != DrawTool.PAN) {
-            resetPanZoom()
-        }
         currentTool = tool
         isEraser = tool == DrawTool.ERASER
     }
