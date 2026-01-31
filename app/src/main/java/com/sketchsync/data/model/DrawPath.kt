@@ -84,5 +84,6 @@ enum class DrawTool {
     LINE,       // 直线
     RECTANGLE,  // 矩形
     CIRCLE,     // 圆形
-    TEXT        // 文字
+    TEXT,       // 文字
+    PAN         // 拖拽/平移
 }

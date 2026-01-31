@@ -439,6 +439,14 @@ fun ToolBar(
                 contentDescription = "圆形"
             )
             
+            // 拖拽/平移
+            ToolButton(
+                icon = Icons.Default.PanTool,
+                selected = currentTool == DrawTool.PAN,
+                onClick = { onToolSelected(DrawTool.PAN) },
+                contentDescription = "拖拽"
+            )
+            
             Spacer(modifier = Modifier.width(8.dp))
             
             // 颜色选择

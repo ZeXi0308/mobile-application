@@ -4,13 +4,16 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.util.AttributeSet
+import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import com.sketchsync.data.model.DrawPath
 import com.sketchsync.data.model.DrawTool
@@ -85,6 +88,28 @@ class DrawingCanvas @JvmOverloads constructor(
     private var canvasBitmap: Bitmap? = null
     private var bitmapCanvas: Canvas? = null
     
+    // 平移和缩放
+    private var translateX: Float = 0f
+    private var translateY: Float = 0f
+    private var scaleFactor: Float = 1f
+    private val minScale = 0.5f
+    private val maxScale = 3f
+    
+    // 平移手势记录
+    private var lastPanX: Float = 0f
+    private var lastPanY: Float = 0f
+    private var isPanning: Boolean = false
+    
+    // 缩放手势检测器
+    private val scaleGestureDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScale(detector: ScaleGestureDetector): Boolean {
+            scaleFactor *= detector.scaleFactor
+            scaleFactor = scaleFactor.coerceIn(minScale, maxScale)
+            invalidate()
+            return true
+        }
+    })
+    
     // 回调
     var onPathCompleted: ((DrawPath) -> Unit)? = null
     var onCursorMoved: ((Float, Float) -> Unit)? = null
@@ -106,6 +131,11 @@ class DrawingCanvas @JvmOverloads constructor(
     
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        
+        // 应用平移和缩放变换
+        canvas.save()
+        canvas.translate(translateX, translateY)
+        canvas.scale(scaleFactor, scaleFactor)
         
         // 绘制缓存的bitmap
         canvasBitmap?.let { canvas.drawBitmap(it, 0f, 0f, null) }
@@ -146,32 +176,73 @@ class DrawingCanvas @JvmOverloads constructor(
                         canvas.drawCircle(startX, startY, radius, previewPaint)
                     }
                 }
-                DrawTool.TEXT -> {
-                    // 文字工具在ACTION_UP时处理
+                DrawTool.TEXT, DrawTool.PAN -> {
+                    // 文字工具在ACTION_UP时处理，PAN不绘制
                 }
             }
         }
         
         // 绘制其他用户的光标
         drawOtherCursors(canvas)
+        
+        canvas.restore()
     }
     
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // 始终处理缩放手势（双指缩放）
+        scaleGestureDetector.onTouchEvent(event)
+        
+        // 如果正在缩放，不处理其他手势
+        if (scaleGestureDetector.isInProgress) {
+            return true
+        }
+        
         val x = event.x
         val y = event.y
         
+        // 如果是平移工具，处理平移逻辑
+        if (currentTool == DrawTool.PAN) {
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastPanX = x
+                    lastPanY = y
+                    isPanning = true
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (isPanning) {
+                        translateX += x - lastPanX
+                        translateY += y - lastPanY
+                        lastPanX = x
+                        lastPanY = y
+                        invalidate()
+                    }
+                    return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    isPanning = false
+                    return true
+                }
+            }
+            return false
+        }
+        
+        // 将触摸坐标转换为画布坐标（考虑平移和缩放）
+        val canvasX = (x - translateX) / scaleFactor
+        val canvasY = (y - translateY) / scaleFactor
+        
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                touchStart(x, y)
+                touchStart(canvasX, canvasY)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                touchMove(x, y)
-                onCursorMoved?.invoke(x, y)
+                touchMove(canvasX, canvasY)
+                onCursorMoved?.invoke(canvasX, canvasY)
                 return true
             }
             MotionEvent.ACTION_UP -> {
-                touchEnd(x, y)
+                touchEnd(canvasX, canvasY)
                 return true
             }
         }
