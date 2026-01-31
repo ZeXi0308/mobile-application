@@ -101,6 +101,9 @@ class VoiceChatManager(
                     Constants.AUDIO_PROFILE_DEFAULT,
                     Constants.AUDIO_SCENARIO_CHATROOM
                 )
+                // 默认使用扬声器（免提）
+                setEnableSpeakerphone(true)
+                setDefaultAudioRoutetoSpeakerphone(true)
             }
             
             isInitialized = true
