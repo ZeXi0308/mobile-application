@@ -112,10 +112,19 @@ fun CanvasScreen(
         viewModel.joinRoom(roomId)
     }
     
+    // 追踪已渲染的路径ID
+    val renderedPathIds = remember { mutableSetOf<String>() }
+    
     // 监听远程路径变化
-    LaunchedEffect(remotePaths) {
-        remotePaths.lastOrNull()?.let { path ->
-            drawingCanvas?.addRemotePath(path)
+    LaunchedEffect(remotePaths, drawingCanvas) {
+        if (drawingCanvas == null) return@LaunchedEffect
+        
+        remotePaths.forEach { path ->
+            // 只添加尚未渲染的路径
+            if (path.id !in renderedPathIds) {
+                drawingCanvas?.addRemotePath(path)
+                renderedPathIds.add(path.id)
+            }
         }
     }
     
