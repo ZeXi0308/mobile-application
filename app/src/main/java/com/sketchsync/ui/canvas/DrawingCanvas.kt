@@ -121,11 +121,18 @@ class DrawingCanvas @JvmOverloads constructor(
     
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        if (w > 0 && h > 0) {
-            canvasBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        // 只在第一次初始化时创建bitmap，使用固定大小确保跨设备同步
+        if (canvasBitmap == null && w > 0 && h > 0) {
+            // 使用固定的画布大小，确保所有设备使用相同坐标系
+            val canvasSize = CANVAS_SIZE
+            canvasBitmap = Bitmap.createBitmap(canvasSize, canvasSize, Bitmap.Config.ARGB_8888)
             bitmapCanvas = Canvas(canvasBitmap!!)
             bitmapCanvas?.drawColor(Color.WHITE)
             redrawAllPaths()
+            
+            // 初始偏移量，使画布居中
+            translateX = (w - canvasSize) / 2f
+            translateY = (h - canvasSize) / 2f
         }
     }
     
@@ -582,6 +589,8 @@ class DrawingCanvas @JvmOverloads constructor(
     )
     
     companion object {
+        // 固定画布大小，确保所有设备使用相同坐标系
+        const val CANVAS_SIZE = 2000
         private const val TOUCH_TOLERANCE = 4f
     }
 }
