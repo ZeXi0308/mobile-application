@@ -125,15 +125,14 @@ class DrawingCanvas @JvmOverloads constructor(
         // 只在第一次初始化时创建bitmap，使用固定大小确保跨设备同步
         if (canvasBitmap == null && w > 0 && h > 0) {
             // 使用固定的画布大小，确保所有设备使用相同坐标系
-            val canvasSize = CANVAS_SIZE
-            canvasBitmap = Bitmap.createBitmap(canvasSize, canvasSize, Bitmap.Config.ARGB_8888)
+            canvasBitmap = Bitmap.createBitmap(CANVAS_SIZE, CANVAS_SIZE, Bitmap.Config.ARGB_8888)
             bitmapCanvas = Canvas(canvasBitmap!!)
             bitmapCanvas?.drawColor(Color.WHITE)
             redrawAllPaths()
             
-            // 初始偏移量，使画布居中
-            translateX = (w - canvasSize) / 2f
-            translateY = (h - canvasSize) / 2f
+            // 初始偏移量设置为0，从左上角开始
+            translateX = 0f
+            translateY = 0f
         }
     }
     
@@ -456,13 +455,12 @@ class DrawingCanvas @JvmOverloads constructor(
     }
     
     /**
-     * 重置平移和缩放，使画布居中显示
+     * 重置平移和缩放
      */
     fun resetPanZoom() {
         scaleFactor = 1f
-        // 居中显示画布
-        translateX = (width - CANVAS_SIZE) / 2f
-        translateY = (height - CANVAS_SIZE) / 2f
+        translateX = 0f
+        translateY = 0f
         invalidate()
     }
     
@@ -598,8 +596,8 @@ class DrawingCanvas @JvmOverloads constructor(
     )
     
     companion object {
-        // 固定画布大小，确保所有设备使用相同坐标系
-        const val CANVAS_SIZE = 2000
+        // 固定画布大小，确保所有设备使用相同坐标系（4000x4000 提供充足的绘画空间）
+        const val CANVAS_SIZE = 4000
         private const val TOUCH_TOLERANCE = 4f
     }
 }
