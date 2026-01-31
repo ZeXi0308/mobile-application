@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "411807814460",
+    "project_id": "sketchsync-8c3e1",
+    "storage_bucket": "sketchsync-8c3e1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:411807814460:android:16a0e73ca340666d870439",
+        "android_client_info": {
+          "package_name": "com.sketchsync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTcsDqhnk8K0LJ4Q8lBQulDboYwa2Rc0c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

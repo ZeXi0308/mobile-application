@@ -15,6 +15,6 @@ build/
 
 
 # Google Services (Firebase) configuration
-google-services.json
+
 
 # Agora config (if in a specific file, but we put it in local.properties)
