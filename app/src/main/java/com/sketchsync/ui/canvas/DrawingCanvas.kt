@@ -115,7 +115,8 @@ class DrawingCanvas @JvmOverloads constructor(
     var onCursorMoved: ((Float, Float) -> Unit)? = null
     
     init {
-        setLayerType(LAYER_TYPE_HARDWARE, null)
+        // 使用SOFTWARE层类型以支持橡皮擦的PorterDuff.Mode.CLEAR
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
         setBackgroundColor(Color.WHITE)
     }
     
@@ -455,13 +456,21 @@ class DrawingCanvas @JvmOverloads constructor(
     }
     
     /**
-     * 重置平移和缩放
+     * 重置平移和缩放，使画布居中显示
      */
     fun resetPanZoom() {
-        translateX = 0f
-        translateY = 0f
         scaleFactor = 1f
+        // 居中显示画布
+        translateX = (width - CANVAS_SIZE) / 2f
+        translateY = (height - CANVAS_SIZE) / 2f
         invalidate()
+    }
+    
+    /**
+     * 将坐标限制在画布范围内
+     */
+    private fun clampToCanvas(value: Float): Float {
+        return value.coerceIn(0f, CANVAS_SIZE.toFloat())
     }
     
     /**
