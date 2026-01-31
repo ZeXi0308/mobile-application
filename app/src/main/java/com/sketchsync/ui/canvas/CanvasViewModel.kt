@@ -187,13 +187,25 @@ class CanvasViewModel @Inject constructor(
      * 加入语音频道
      */
     fun joinVoiceChannel() {
-        val roomId = currentRoomId ?: return
-        val userId = currentUserId ?: return
+        val roomId = currentRoomId
+        val userId = currentUserId
         
-        _uiState.value = _uiState.value.copy(isVoiceConnecting = true)
+        android.util.Log.d("CanvasViewModel", "joinVoiceChannel called: roomId=$roomId, userId=$userId")
+        
+        if (roomId == null) {
+            _uiState.value = _uiState.value.copy(error = "房间ID为空，无法加入语音")
+            return
+        }
+        if (userId == null) {
+            _uiState.value = _uiState.value.copy(error = "用户未登录，无法加入语音")
+            return
+        }
+        
+        _uiState.value = _uiState.value.copy(isVoiceConnecting = true, message = "正在连接语音...")
         
         // 设置监听器
         voiceChatManager.setOnJoinChannelSuccessListener { channel, uid ->
+            android.util.Log.d("CanvasViewModel", "Voice joined: channel=$channel, uid=$uid")
             _uiState.value = _uiState.value.copy(
                 isVoiceEnabled = true,
                 isVoiceConnecting = false,
@@ -202,6 +214,7 @@ class CanvasViewModel @Inject constructor(
         }
         
         voiceChatManager.setOnErrorListener { err, msg ->
+            android.util.Log.e("CanvasViewModel", "Voice error: $err - $msg")
             _uiState.value = _uiState.value.copy(
                 isVoiceEnabled = false,
                 isVoiceConnecting = false,
@@ -210,10 +223,12 @@ class CanvasViewModel @Inject constructor(
         }
         
         val success = voiceChatManager.joinChannel(roomId, userId.hashCode())
+        android.util.Log.d("CanvasViewModel", "joinChannel result: $success")
+        
         if (!success) {
             _uiState.value = _uiState.value.copy(
                 isVoiceConnecting = false,
-                error = "无法初始化语音引擎"
+                error = "无法初始化语音引擎，请检查Agora配置"
             )
         }
     }
