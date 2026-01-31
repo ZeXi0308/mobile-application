@@ -126,12 +126,18 @@ class CanvasViewModel @Inject constructor(
      * 开始监听清空事件
      */
     private fun startClearEventSync(roomId: String) {
+        // 记录加入房间的时间，只处理之后的清空事件
+        val joinTime = System.currentTimeMillis()
+        
         viewModelScope.launch {
             drawingRepository.observeClearEvents(roomId)
                 .catch { /* 忽略错误 */ }
                 .collect { timestamp ->
-                    _clearEvent.value = timestamp
-                    _remotePaths.value = emptyList()
+                    // 只处理加入房间之后发生的清空事件
+                    if (timestamp > joinTime) {
+                        _clearEvent.value = timestamp
+                        _remotePaths.value = emptyList()
+                    }
                 }
         }
     }
