@@ -339,6 +339,7 @@ class RoomRepository @Inject constructor(
      * 观察所有房间的在线人数
      */
     fun observeAllRoomPresenceCounts(): Flow<Map<String, Int>> = callbackFlow {
+        Log.d(TAG, "observeAllRoomPresenceCounts: Starting observer")
         val listener = presenceRef.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val counts = mutableMapOf<String, Int>()
@@ -351,14 +352,19 @@ class RoomRepository @Inject constructor(
                     }
                     counts[roomId] = count
                 }
+                Log.d(TAG, "observeAllRoomPresenceCounts: Emitting counts=$counts")
                 trySend(counts)
             }
             
             override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "observeAllRoomPresenceCounts cancelled: ${error.message}")
                 close(error.toException())
             }
         })
         
-        awaitClose { presenceRef.removeEventListener(listener) }
+        awaitClose { 
+            Log.d(TAG, "observeAllRoomPresenceCounts: Closing observer")
+            presenceRef.removeEventListener(listener) 
+        }
     }
 }
