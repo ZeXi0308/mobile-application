@@ -26,7 +26,10 @@ object FirebaseModule {
     @Provides
     @Singleton
     fun provideFirebaseDatabase(): FirebaseDatabase {
-        return FirebaseDatabase.getInstance().apply {
+        // 使用明确的数据库URL确保正确连接
+        // 注意：如果你的Firebase项目在不同区域，需要修改这个URL
+        val databaseUrl = "https://sketchsync-8c3e1-default-rtdb.firebaseio.com"
+        return FirebaseDatabase.getInstance(databaseUrl).apply {
             // 开启离线持久化
             setPersistenceEnabled(true)
         }
