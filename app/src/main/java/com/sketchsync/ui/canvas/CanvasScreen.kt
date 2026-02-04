@@ -129,6 +129,9 @@ fun CanvasScreen(
         }
     }
     
+    // 监听在线用户
+    val onlineUsers by viewModel.onlineUsers.collectAsState()
+    
     // 监听清空事件
     var lastClearTime by remember { mutableStateOf(0L) }
     LaunchedEffect(clearEvent) {
@@ -164,7 +167,8 @@ fun CanvasScreen(
                             fontSize = 16.sp
                         )
                         Text(
-                            text = "${room?.participants?.size ?: 0}人在线",
+                            // 使用实时在线人数
+                            text = "${onlineUsers.size}人在线",
                             fontSize = 12.sp,
                             color = Color.Gray
                         )
