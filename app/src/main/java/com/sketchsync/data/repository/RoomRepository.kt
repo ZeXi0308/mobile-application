@@ -1,5 +1,6 @@
 package com.sketchsync.data.repository
 
+import android.util.Log
 import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -16,6 +17,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "RoomRepository"
 
 /**
  * 房间仓库
@@ -264,27 +267,36 @@ class RoomRepository @Inject constructor(
      * 设置用户在线状态（使用Firebase Realtime Database的onDisconnect实现自动离线）
      */
     fun setUserPresence(roomId: String, userId: String, userName: String) {
+        Log.d(TAG, "setUserPresence: roomId=$roomId, userId=$userId, userName=$userName")
         val userPresenceRef = presenceRef.child(roomId).child(userId)
         
-        // 监听连接状态
+        // 立即设置在线状态
+        val presenceData = mapOf(
+            "online" to true,
+            "userName" to userName,
+            "lastSeen" to System.currentTimeMillis()
+        )
+        userPresenceRef.setValue(presenceData)
+            .addOnSuccessListener { Log.d(TAG, "Presence set successfully for $userId in room $roomId") }
+            .addOnFailureListener { e -> Log.e(TAG, "Failed to set presence: ${e.message}") }
+        
+        // 设置断开时自动移除（作为备份机制）
+        userPresenceRef.onDisconnect().removeValue()
+        
+        // 监听连接状态变化，重新连接时恢复在线状态
         connectedRef.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val connected = snapshot.getValue(Boolean::class.java) ?: false
+                Log.d(TAG, "Connection state changed: connected=$connected")
                 if (connected) {
-                    // 设置在线状态
-                    userPresenceRef.setValue(mapOf(
-                        "online" to true,
-                        "userName" to userName,
-                        "lastSeen" to System.currentTimeMillis()
-                    ))
-                    
-                    // 设置断开时自动移除
+                    // 重新连接时恢复在线状态
+                    userPresenceRef.setValue(presenceData)
                     userPresenceRef.onDisconnect().removeValue()
                 }
             }
             
             override fun onCancelled(error: DatabaseError) {
-                // 忽略错误
+                Log.e(TAG, "Connection listener cancelled: ${error.message}")
             }
         })
     }
@@ -293,6 +305,7 @@ class RoomRepository @Inject constructor(
      * 移除用户在线状态
      */
     fun removeUserPresence(roomId: String, userId: String) {
+        Log.d(TAG, "removeUserPresence: roomId=$roomId, userId=$userId")
         presenceRef.child(roomId).child(userId).removeValue()
     }
     
