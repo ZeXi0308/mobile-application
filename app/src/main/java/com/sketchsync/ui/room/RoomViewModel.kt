@@ -1,5 +1,6 @@
 package com.sketchsync.ui.room
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sketchsync.data.model.GameMode
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+private const val TAG = "RoomViewModel"
 
 /**
  * 房间列表ViewModel
@@ -47,12 +50,15 @@ class RoomViewModel @Inject constructor(
      * 加载房间列表
      */
     private fun loadRooms() {
+        Log.d(TAG, "loadRooms: Starting rooms and presence observers")
+        
         viewModelScope.launch {
             roomRepository.observeActiveRooms()
                 .catch { e ->
                     _uiState.value = _uiState.value.copy(error = e.message)
                 }
                 .collect { rooms ->
+                    Log.d(TAG, "loadRooms: Received ${rooms.size} rooms")
                     _rooms.value = rooms
                 }
         }
@@ -60,8 +66,11 @@ class RoomViewModel @Inject constructor(
         // 同时观察所有房间的实时在线人数
         viewModelScope.launch {
             roomRepository.observeAllRoomPresenceCounts()
-                .catch { /* 忽略错误 */ }
+                .catch { e -> 
+                    Log.e(TAG, "loadRooms: Presence observation error: ${e.message}")
+                }
                 .collect { counts ->
+                    Log.d(TAG, "loadRooms: Received presence counts: $counts")
                     _roomPresenceCounts.value = counts
                 }
         }
