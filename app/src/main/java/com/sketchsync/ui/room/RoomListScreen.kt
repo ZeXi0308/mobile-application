@@ -165,7 +165,11 @@ fun RoomListScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(rooms) { room ->
+                    // 使用组合key确保presenceCount变化时UI能重新渲染
+                    items(
+                        items = rooms,
+                        key = { room -> "${room.id}_${roomPresenceCounts[room.id] ?: 0}" }
+                    ) { room ->
                         RoomCard(
                             room = room,
                             presenceCount = roomPresenceCounts[room.id] ?: 0,
