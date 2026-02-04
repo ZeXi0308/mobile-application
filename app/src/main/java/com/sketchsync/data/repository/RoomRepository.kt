@@ -28,6 +28,8 @@ class RoomRepository @Inject constructor(
 ) {
     private val roomsCollection = firestore.collection("rooms")
     private val roomsRef = database.reference.child("rooms")
+    private val presenceRef = database.reference.child("presence")
+    private val connectedRef = database.reference.child(".info/connected")
     
     /**
      * 创建新房间
@@ -256,5 +258,67 @@ class RoomRepository @Inject constructor(
      */
     suspend fun joinRoomById(roomId: String, userId: String, userName: String): Result<Room> {
         return joinRoom(roomId, userId, userName, null)
+    }
+    
+    /**
+     * 设置用户在线状态（使用Firebase Realtime Database的onDisconnect实现自动离线）
+     */
+    fun setUserPresence(roomId: String, userId: String, userName: String) {
+        val userPresenceRef = presenceRef.child(roomId).child(userId)
+        
+        // 监听连接状态
+        connectedRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val connected = snapshot.getValue(Boolean::class.java) ?: false
+                if (connected) {
+                    // 设置在线状态
+                    userPresenceRef.setValue(mapOf(
+                        "online" to true,
+                        "userName" to userName,
+                        "lastSeen" to System.currentTimeMillis()
+                    ))
+                    
+                    // 设置断开时自动移除
+                    userPresenceRef.onDisconnect().removeValue()
+                }
+            }
+            
+            override fun onCancelled(error: DatabaseError) {
+                // 忽略错误
+            }
+        })
+    }
+    
+    /**
+     * 移除用户在线状态
+     */
+    fun removeUserPresence(roomId: String, userId: String) {
+        presenceRef.child(roomId).child(userId).removeValue()
+    }
+    
+    /**
+     * 观察房间在线用户
+     */
+    fun observeRoomPresence(roomId: String): Flow<Map<String, String>> = callbackFlow {
+        val listener = presenceRef.child(roomId).addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val onlineUsers = mutableMapOf<String, String>()
+                snapshot.children.forEach { child ->
+                    val userId = child.key ?: return@forEach
+                    val userName = child.child("userName").getValue(String::class.java) ?: "用户"
+                    val online = child.child("online").getValue(Boolean::class.java) ?: false
+                    if (online) {
+                        onlineUsers[userId] = userName
+                    }
+                }
+                trySend(onlineUsers)
+            }
+            
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        })
+        
+        awaitClose { presenceRef.child(roomId).removeEventListener(listener) }
     }
 }

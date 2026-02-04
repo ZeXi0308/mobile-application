@@ -49,10 +49,15 @@ class CanvasViewModel @Inject constructor(
     private val _clearEvent = MutableStateFlow(0L)
     val clearEvent: StateFlow<Long> = _clearEvent.asStateFlow()
     
+    // 在线用户（使用Firebase Presence系统）
+    private val _onlineUsers = MutableStateFlow<Map<String, String>>(emptyMap())
+    val onlineUsers: StateFlow<Map<String, String>> = _onlineUsers.asStateFlow()
+    
     // 当前用户信息
     val currentUserId: String? get() = authRepository.currentUserId
     
     private var currentRoomId: String? = null
+    private var currentUserName: String? = null
     
     /**
      * 加入房间并开始同步
@@ -66,6 +71,15 @@ class CanvasViewModel @Inject constructor(
                 _room.value = room
             }
             
+            // 获取当前用户名并设置在线状态
+            val userId = currentUserId
+            if (userId != null) {
+                val userProfile = authRepository.getCurrentUserProfile().getOrNull()
+                val userName = userProfile?.displayName ?: "用户"
+                currentUserName = userName
+                roomRepository.setUserPresence(roomId, userId, userName)
+            }
+            
             // 加载已有路径
             loadExistingPaths(roomId)
             
@@ -77,6 +91,9 @@ class CanvasViewModel @Inject constructor(
             
             // 开始监听清空事件
             startClearEventSync(roomId)
+            
+            // 开始监听在线用户
+            startPresenceSync(roomId)
         }
     }
     
@@ -138,6 +155,19 @@ class CanvasViewModel @Inject constructor(
                         _clearEvent.value = timestamp
                         _remotePaths.value = emptyList()
                     }
+                }
+        }
+    }
+    
+    /**
+     * 开始监听在线用户
+     */
+    private fun startPresenceSync(roomId: String) {
+        viewModelScope.launch {
+            roomRepository.observeRoomPresence(roomId)
+                .catch { /* 忽略错误 */ }
+                .collect { users ->
+                    _onlineUsers.value = users
                 }
         }
     }
@@ -307,6 +337,9 @@ class CanvasViewModel @Inject constructor(
     fun leaveRoom() {
         val roomId = currentRoomId ?: return
         val userId = currentUserId ?: return
+        
+        // 立即移除在线状态（onDisconnect会作为备份）
+        roomRepository.removeUserPresence(roomId, userId)
         
         viewModelScope.launch {
             roomRepository.leaveRoom(roomId, userId)
