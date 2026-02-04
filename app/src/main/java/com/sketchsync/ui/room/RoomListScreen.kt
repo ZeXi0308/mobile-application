@@ -72,6 +72,7 @@ fun RoomListScreen(
 ) {
     val rooms by viewModel.rooms.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val roomPresenceCounts by viewModel.roomPresenceCounts.collectAsState()
     
     var showCreateDialog by remember { mutableStateOf(false) }
     var showJoinByIdDialog by remember { mutableStateOf(false) }
@@ -167,6 +168,7 @@ fun RoomListScreen(
                     items(rooms) { room ->
                         RoomCard(
                             room = room,
+                            presenceCount = roomPresenceCounts[room.id] ?: 0,
                             onClick = { viewModel.joinRoom(room.id) }
                         )
                     }
@@ -218,6 +220,7 @@ fun RoomListScreen(
 @Composable
 fun RoomCard(
     room: Room,
+    presenceCount: Int,
     onClick: () -> Unit
 ) {
     Card(
@@ -306,7 +309,8 @@ fun RoomCard(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "${room.participants.size}/${room.maxParticipants}",
+                    // 使用实时presence计数
+                    text = "${presenceCount}/${room.maxParticipants}",
                     fontSize = 14.sp,
                     color = Color.Gray
                 )

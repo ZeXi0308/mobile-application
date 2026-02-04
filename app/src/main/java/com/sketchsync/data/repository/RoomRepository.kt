@@ -321,4 +321,31 @@ class RoomRepository @Inject constructor(
         
         awaitClose { presenceRef.child(roomId).removeEventListener(listener) }
     }
+    
+    /**
+     * 观察所有房间的在线人数
+     */
+    fun observeAllRoomPresenceCounts(): Flow<Map<String, Int>> = callbackFlow {
+        val listener = presenceRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val counts = mutableMapOf<String, Int>()
+                snapshot.children.forEach { roomSnapshot ->
+                    val roomId = roomSnapshot.key ?: return@forEach
+                    var count = 0
+                    roomSnapshot.children.forEach { userSnapshot ->
+                        val online = userSnapshot.child("online").getValue(Boolean::class.java) ?: false
+                        if (online) count++
+                    }
+                    counts[roomId] = count
+                }
+                trySend(counts)
+            }
+            
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        })
+        
+        awaitClose { presenceRef.removeEventListener(listener) }
+    }
 }

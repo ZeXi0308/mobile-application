@@ -28,6 +28,10 @@ class RoomViewModel @Inject constructor(
     private val _rooms = MutableStateFlow<List<Room>>(emptyList())
     val rooms: StateFlow<List<Room>> = _rooms.asStateFlow()
     
+    // 每个房间的实时在线人数（使用Presence系统）
+    private val _roomPresenceCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val roomPresenceCounts: StateFlow<Map<String, Int>> = _roomPresenceCounts.asStateFlow()
+    
     // UI状态
     private val _uiState = MutableStateFlow(RoomUiState())
     val uiState: StateFlow<RoomUiState> = _uiState.asStateFlow()
@@ -50,6 +54,15 @@ class RoomViewModel @Inject constructor(
                 }
                 .collect { rooms ->
                     _rooms.value = rooms
+                }
+        }
+        
+        // 同时观察所有房间的实时在线人数
+        viewModelScope.launch {
+            roomRepository.observeAllRoomPresenceCounts()
+                .catch { /* 忽略错误 */ }
+                .collect { counts ->
+                    _roomPresenceCounts.value = counts
                 }
         }
     }
