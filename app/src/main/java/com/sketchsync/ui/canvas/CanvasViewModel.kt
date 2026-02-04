@@ -58,11 +58,13 @@ class CanvasViewModel @Inject constructor(
     
     private var currentRoomId: String? = null
     private var currentUserName: String? = null
+    private var hasLeftRoom: Boolean = false
     
     /**
      * 加入房间并开始同步
      */
     fun joinRoom(roomId: String) {
+        hasLeftRoom = false
         currentRoomId = roomId
         
         viewModelScope.launch {
@@ -335,6 +337,9 @@ class CanvasViewModel @Inject constructor(
      * 离开房间
      */
     fun leaveRoom() {
+        if (hasLeftRoom) return  // 防止重复调用
+        hasLeftRoom = true
+        
         val roomId = currentRoomId ?: return
         val userId = currentUserId ?: return
         
