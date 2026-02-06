@@ -12,6 +12,7 @@ import com.sketchsync.data.repository.RoomRepository
 import com.sketchsync.util.ReplayManager
 import com.sketchsync.util.VoiceChatManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,6 +75,7 @@ class CanvasViewModel @Inject constructor(
     private var currentRoomId: String? = null
     private var currentUserName: String? = null
     private var hasLeftRoom: Boolean = false
+    private var roomObserverJob: Job? = null
     
     /**
      * 加入房间并开始同步
@@ -83,10 +85,8 @@ class CanvasViewModel @Inject constructor(
         currentRoomId = roomId
         
         viewModelScope.launch {
-            // 获取房间信息
-            roomRepository.getRoom(roomId).onSuccess { room ->
-                _room.value = room
-            }
+            // 监听房间信息（实时更新角色/成员）
+            startRoomSync(roomId)
             
             // 获取当前用户名并设置在线状态
             val userId = currentUserId
@@ -111,6 +111,17 @@ class CanvasViewModel @Inject constructor(
             
             // 开始监听在线用户
             startPresenceSync(roomId)
+        }
+    }
+
+    private fun startRoomSync(roomId: String) {
+        roomObserverJob?.cancel()
+        roomObserverJob = viewModelScope.launch {
+            roomRepository.observeRoom(roomId)
+                .catch { /* 忽略错误 */ }
+                .collect { room ->
+                    _room.value = room
+                }
         }
     }
     
@@ -379,6 +390,7 @@ class CanvasViewModel @Inject constructor(
         
         val roomId = currentRoomId ?: return
         val userId = currentUserId ?: return
+        roomObserverJob?.cancel()
         
         // 立即移除在线状态（onDisconnect会作为备份）
         roomRepository.removeUserPresence(roomId, userId)
