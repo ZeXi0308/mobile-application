@@ -33,6 +33,7 @@ class RoomRepository @Inject constructor(
     private val roomsRef = database.reference.child("rooms")
     private val presenceRef = database.reference.child("presence")
     private val connectedRef = database.reference.child(".info/connected")
+    private val presenceConnectionListeners = mutableMapOf<String, ValueEventListener>()
     
     /**
      * 创建新房间
@@ -293,6 +294,7 @@ class RoomRepository @Inject constructor(
     fun setUserPresence(roomId: String, userId: String, userName: String) {
         Log.d(TAG, "setUserPresence: roomId=$roomId, userId=$userId, userName=$userName")
         val userPresenceRef = presenceRef.child(roomId).child(userId)
+        val listenerKey = "$roomId:$userId"
         
         // 立即设置在线状态
         val presenceData = mapOf(
@@ -308,7 +310,8 @@ class RoomRepository @Inject constructor(
         userPresenceRef.onDisconnect().removeValue()
         
         // 监听连接状态变化，重新连接时恢复在线状态
-        connectedRef.addValueEventListener(object : ValueEventListener {
+        presenceConnectionListeners[listenerKey]?.let { connectedRef.removeEventListener(it) }
+        val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val connected = snapshot.getValue(Boolean::class.java) ?: false
                 Log.d(TAG, "Connection state changed: connected=$connected")
@@ -322,7 +325,9 @@ class RoomRepository @Inject constructor(
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "Connection listener cancelled: ${error.message}")
             }
-        })
+        }
+        connectedRef.addValueEventListener(listener)
+        presenceConnectionListeners[listenerKey] = listener
     }
     
     /**
@@ -330,6 +335,8 @@ class RoomRepository @Inject constructor(
      */
     fun removeUserPresence(roomId: String, userId: String) {
         Log.d(TAG, "removeUserPresence: roomId=$roomId, userId=$userId")
+        val listenerKey = "$roomId:$userId"
+        presenceConnectionListeners.remove(listenerKey)?.let { connectedRef.removeEventListener(it) }
         presenceRef.child(roomId).child(userId).removeValue()
     }
     

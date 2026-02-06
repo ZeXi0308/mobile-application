@@ -343,6 +343,7 @@ class CanvasViewModel @Inject constructor(
      */
     fun exportCanvas(imageBytes: ByteArray?) {
         val roomId = currentRoomId ?: return
+        val userId = currentUserId ?: return
         
         if (imageBytes == null || imageBytes.isEmpty()) {
             _uiState.value = _uiState.value.copy(error = "画布为空，无法保存")
@@ -352,7 +353,7 @@ class CanvasViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isExporting = true, message = "正在保存...")
             
-            drawingRepository.uploadCanvasImage(roomId, imageBytes)
+            drawingRepository.uploadCanvasImage(roomId, userId, imageBytes)
                 .onSuccess { url ->
                     _uiState.value = _uiState.value.copy(
                         isExporting = false,

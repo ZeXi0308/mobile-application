@@ -8,6 +8,7 @@ import com.sketchsync.data.model.Room
 import com.sketchsync.data.repository.AuthRepository
 import com.sketchsync.data.repository.RoomRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +42,9 @@ class RoomViewModel @Inject constructor(
     
     // 当前用户信息
     val currentUserId: String? get() = authRepository.currentUserId
+
+    private var roomsJob: Job? = null
+    private var presenceJob: Job? = null
     
     init {
         loadRooms()
@@ -51,8 +55,11 @@ class RoomViewModel @Inject constructor(
      */
     private fun loadRooms() {
         Log.d(TAG, "loadRooms: Starting rooms and presence observers")
-        
-        viewModelScope.launch {
+
+        roomsJob?.cancel()
+        presenceJob?.cancel()
+
+        roomsJob = viewModelScope.launch {
             roomRepository.observeActiveRooms()
                 .catch { e ->
                     _uiState.value = _uiState.value.copy(error = e.message)
@@ -64,7 +71,7 @@ class RoomViewModel @Inject constructor(
         }
         
         // 同时观察所有房间的实时在线人数
-        viewModelScope.launch {
+        presenceJob = viewModelScope.launch {
             roomRepository.observeAllRoomPresenceCounts()
                 .catch { e -> 
                     Log.e(TAG, "loadRooms: Presence observation error: ${e.message}")

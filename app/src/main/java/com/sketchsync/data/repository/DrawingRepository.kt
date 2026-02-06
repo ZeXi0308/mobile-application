@@ -232,12 +232,12 @@ class DrawingRepository @Inject constructor(
     }
     
     /**
-     * 导出画布为图片并上传到Firebase Storage
+     * 导出画布为图片并上传到Firebase Storage（按用户归档）
      */
-    suspend fun uploadCanvasImage(roomId: String, imageBytes: ByteArray): Result<String> {
+    suspend fun uploadCanvasImage(roomId: String, userId: String, imageBytes: ByteArray): Result<String> {
         return try {
-            val fileName = "${System.currentTimeMillis()}.png"
-            val imageRef = storage.reference.child("drawings/$roomId/$fileName")
+            val fileName = "${roomId}_${System.currentTimeMillis()}.png"
+            val imageRef = storage.reference.child("drawings/users/$userId/$fileName")
             
             imageRef.putBytes(imageBytes).await()
             val downloadUrl = imageRef.downloadUrl.await().toString()
@@ -249,11 +249,11 @@ class DrawingRepository @Inject constructor(
     }
     
     /**
-     * 获取房间保存的图片列表
+     * 获取用户保存的图片列表
      */
-    suspend fun getSavedImages(roomId: String): Result<List<String>> {
+    suspend fun getSavedImages(userId: String): Result<List<String>> {
         return try {
-            val listResult = storage.reference.child("drawings/$roomId").listAll().await()
+            val listResult = storage.reference.child("drawings/users/$userId").listAll().await()
             val urls = listResult.items.map { it.downloadUrl.await().toString() }
             Result.success(urls)
         } catch (e: Exception) {
