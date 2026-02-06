@@ -64,6 +64,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.awaitPointerEvent
+import androidx.compose.ui.input.pointer.awaitPointerEventScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,7 +74,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import com.sketchsync.data.model.DrawTool
+import com.sketchsync.data.model.RoomRole
+import com.sketchsync.util.ReplayState
 import com.sketchsync.ui.theme.DrawingColors
 import com.sketchsync.ui.theme.PrimaryBlue
 
@@ -88,6 +99,7 @@ fun CanvasScreen(
     val uiState by viewModel.uiState.collectAsState()
     val room by viewModel.room.collectAsState()
     val remotePaths by viewModel.remotePaths.collectAsState()
+    val allPaths by viewModel.allPaths.collectAsState()
     val cursors by viewModel.cursors.collectAsState()
     val clearEvent by viewModel.clearEvent.collectAsState()
     val context = LocalContext.current
@@ -96,6 +108,21 @@ fun CanvasScreen(
     var showColorPicker by remember { mutableStateOf(false) }
     var showStrokeSlider by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var showTextInput by remember { mutableStateOf(false) }
+    var textPosition by remember { mutableStateOf(Pair(0f, 0f)) }
+    var showMemberDialog by remember { mutableStateOf(false) }
+    
+    // 获取当前用户角色
+    val currentUserRole = remember(room, viewModel.currentUserId) {
+        room?.getUserRole(viewModel.currentUserId ?: "") ?: RoomRole.EDITOR
+    }
+    val isViewer = currentUserRole == RoomRole.VIEWER
+    
+    // 回放状态
+    val replayState by viewModel.replayState.collectAsState()
+    val replayProgress by viewModel.replayProgress.collectAsState()
+    val replayPathIds by viewModel.replayPathIds.collectAsState()
+    val isReplaying = replayState != ReplayState.IDLE
     
     // 麦克风权限
     val micPermissionLauncher = rememberLauncherForActivityResult(
@@ -117,14 +144,22 @@ fun CanvasScreen(
     val renderedPathIds = remember { mutableSetOf<String>() }
     
     // 监听远程路径变化
-    LaunchedEffect(remotePaths, drawingCanvas) {
+    // 监听远程路径变化和回放状态
+    LaunchedEffect(allPaths, remotePaths, drawingCanvas, replayState, replayPathIds) {
         if (drawingCanvas == null) return@LaunchedEffect
         
-        remotePaths.forEach { path ->
-            // 只添加尚未渲染的路径
-            if (path.id !in renderedPathIds) {
-                drawingCanvas?.addRemotePath(path)
-                renderedPathIds.add(path.id)
+        if (replayState != ReplayState.IDLE) {
+            // 回放模式：只渲染回放路径，不影响原始画布状态
+            val pathsToShow = allPaths.filter { it.id in replayPathIds }
+            drawingCanvas?.setReplayPaths(pathsToShow)
+        } else {
+            // 普通模式：增量添加
+            remotePaths.forEach { path ->
+                // 只添加尚未渲染的路径
+                if (path.id !in renderedPathIds) {
+                    drawingCanvas?.addRemotePath(path)
+                    renderedPathIds.add(path.id)
+                }
             }
         }
     }
@@ -223,6 +258,13 @@ fun CanvasScreen(
                         }
                     }
                     
+                    // 成员管理按钮 (仅房主)
+                    if (currentUserRole == RoomRole.OWNER) {
+                        IconButton(onClick = { showMemberDialog = true }) {
+                            Icon(Icons.Default.Person, contentDescription = "成员管理")
+                        }
+                    }
+                    
                     // 保存按钮
                     IconButton(
                         onClick = {
@@ -234,9 +276,27 @@ fun CanvasScreen(
                         Icon(Icons.Default.Save, contentDescription = "保存")
                     }
                     
-                    // 清空按钮
-                    IconButton(onClick = { showClearConfirm = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "清空", tint = Color.Red)
+                    // 回放按钮
+                    IconButton(
+                        onClick = {
+                            if (isReplaying) {
+                                viewModel.stopReplay()
+                            } else {
+                                viewModel.startReplay()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            if (isReplaying) Icons.Default.Cancel else Icons.Default.PlayArrow,
+                            contentDescription = if (isReplaying) "停止回放" else "回放"
+                        )
+                    }
+                    
+                    // 清空按钮 (Viewer不可用)
+                    if (!isViewer) {
+                        IconButton(onClick = { showClearConfirm = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "清空", tint = Color.Red)
+                        }
                     }
                 }
             )
@@ -247,7 +307,7 @@ fun CanvasScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 画布区域
+            // 绘画区域 (包含回放控制条)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -262,6 +322,8 @@ fun CanvasScreen(
                             setTool(uiState.currentTool)
                             setColor(uiState.currentColor)
                             setStrokeWidth(uiState.currentStrokeWidth)
+                            setReadOnly(isViewer || isReplaying)
+                            setReplayMode(isReplaying)
                             
                             onPathCompleted = { path ->
                                 viewModel.sendPath(path)
@@ -270,32 +332,90 @@ fun CanvasScreen(
                             onCursorMoved = { x, y ->
                                 viewModel.updateCursor(x, y)
                             }
+                            
+                            onTextToolClicked = { x, y ->
+                                textPosition = Pair(x, y)
+                                showTextInput = true
+                            }
                         }
                     },
                     update = { canvas ->
                         canvas.setTool(uiState.currentTool)
                         canvas.setColor(uiState.currentColor)
                         canvas.setStrokeWidth(uiState.currentStrokeWidth)
+                        canvas.setReadOnly(isViewer || isReplaying)
+                        canvas.setReplayMode(isReplaying)
                     }
                 )
+                
+                if (isViewer || isReplaying) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        awaitPointerEvent()
+                                    }
+                                }
+                            }
+                    )
+                }
+                
+                // 回放控制条
+                if (isReplaying) {
+                    Card(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp)
+                            .fillMaxWidth(0.9f),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f))
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Slider(
+                                value = replayProgress,
+                                onValueChange = { viewModel.seekReplay(it) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                IconButton(
+                                    onClick = { 
+                                        if (replayState == ReplayState.PLAYING) viewModel.pauseReplay() 
+                                        else viewModel.resumeReplay() 
+                                    }
+                                ) {
+                                    Icon(
+                                        if (replayState == ReplayState.PLAYING) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = if (replayState == ReplayState.PLAYING) "暂停" else "播放"
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
             
-            // 工具栏
-            ToolBar(
-                currentTool = uiState.currentTool,
-                currentColor = uiState.currentColor,
-                currentStrokeWidth = uiState.currentStrokeWidth,
-                canUndo = drawingCanvas?.canUndo() ?: false,
-                canRedo = drawingCanvas?.canRedo() ?: false,
-                onToolSelected = { tool ->
-                    viewModel.setTool(tool)
-                    drawingCanvas?.setTool(tool)
-                },
-                onColorClick = { showColorPicker = true },
-                onStrokeClick = { showStrokeSlider = true },
-                onUndo = { drawingCanvas?.undo() },
-                onRedo = { drawingCanvas?.redo() }
-            )
+            // 工具栏 (Viewer模式和回放模式下隐藏)
+            if (!isViewer && !isReplaying) {
+                ToolBar(
+                    currentTool = uiState.currentTool,
+                    currentColor = uiState.currentColor,
+                    currentStrokeWidth = uiState.currentStrokeWidth,
+                    canUndo = drawingCanvas?.canUndo() ?: false,
+                    canRedo = drawingCanvas?.canRedo() ?: false,
+                    onToolSelected = { tool ->
+                        viewModel.setTool(tool)
+                        drawingCanvas?.setTool(tool)
+                    },
+                    onColorClick = { showColorPicker = true },
+                    onStrokeClick = { showStrokeSlider = true },
+                    onUndo = { drawingCanvas?.undo() },
+                    onRedo = { drawingCanvas?.redo() }
+                )
+            }
         }
         
         // 颜色选择器
@@ -373,6 +493,41 @@ fun CanvasScreen(
                 }
             ) {
                 Text(error)
+            }
+        }
+        
+        // 文字输入对话框
+        if (showTextInput) {
+            TextInputDialog(
+                onDismiss = { showTextInput = false },
+                onConfirm = { text, fontSize ->
+                    // 在画布中心位置添加文字（可以根据点击位置调整）
+                    val x = textPosition.first
+                    val y = textPosition.second
+                    
+                    drawingCanvas?.addTextPath(x, y, text, fontSize)?.let { path ->
+                        viewModel.sendPath(path)
+                    }
+                    showTextInput = false
+                },
+                currentColor = uiState.currentColor
+            )
+        }
+        
+        // 成员管理对话框
+        if (showMemberDialog && currentUserRole == RoomRole.OWNER) {
+            room?.let { r ->
+                MemberManagementDialog(
+                    room = r,
+                    currentUserId = viewModel.currentUserId ?: "",
+                    onDismiss = { showMemberDialog = false },
+                    onSetRole = { userId, role ->
+                        viewModel.setMemberRole(userId, role.name)
+                    },
+                    onKickMember = { userId ->
+                        viewModel.kickMember(userId)
+                    }
+                )
             }
         }
     }
@@ -458,6 +613,26 @@ fun ToolBar(
                 onClick = { onToolSelected(DrawTool.CIRCLE) },
                 contentDescription = "圆形"
             )
+            
+            // 文字工具
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (currentTool == DrawTool.TEXT) PrimaryBlue.copy(alpha = 0.2f)
+                        else Color.Transparent
+                    )
+                    .clickable { onToolSelected(DrawTool.TEXT) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "T",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (currentTool == DrawTool.TEXT) PrimaryBlue else Color.Gray
+                )
+            }
             
             // 拖拽/平移 (使用自定义图标)
             Box(

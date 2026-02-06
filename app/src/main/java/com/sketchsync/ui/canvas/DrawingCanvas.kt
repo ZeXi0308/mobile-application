@@ -36,6 +36,9 @@ class DrawingCanvas @JvmOverloads constructor(
     private var currentColor: Int = Color.BLACK
     private var currentStrokeWidth: Float = 8f
     private var isEraser: Boolean = false
+    private var isReadOnly: Boolean = false
+    private var isReplayMode: Boolean = false
+    private var replayPaths: List<DrawPath> = emptyList()
     
     // 当前正在绘制的路径
     private var currentPath: Path = Path()
@@ -84,6 +87,13 @@ class DrawingCanvas @JvmOverloads constructor(
         alpha = 128
     }
     
+    // 文字画笔
+    private val textPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+        textAlign = Paint.Align.LEFT
+    }
+    
     // 背景Bitmap用于橡皮擦
     private var canvasBitmap: Bitmap? = null
     private var bitmapCanvas: Canvas? = null
@@ -113,6 +123,7 @@ class DrawingCanvas @JvmOverloads constructor(
     // 回调
     var onPathCompleted: ((DrawPath) -> Unit)? = null
     var onCursorMoved: ((Float, Float) -> Unit)? = null
+    var onTextToolClicked: ((Float, Float) -> Unit)? = null  // 文字工具点击回调
     
     init {
         // 使用SOFTWARE层类型以支持橡皮擦的PorterDuff.Mode.CLEAR
@@ -143,59 +154,70 @@ class DrawingCanvas @JvmOverloads constructor(
         canvas.save()
         canvas.translate(translateX, translateY)
         canvas.scale(scaleFactor, scaleFactor)
-        
-        // 绘制缓存的bitmap
-        canvasBitmap?.let { canvas.drawBitmap(it, 0f, 0f, null) }
-        
-        // 绘制当前正在绘制的路径
-        if (currentPoints.isNotEmpty()) {
-            when (currentTool) {
-                DrawTool.BRUSH, DrawTool.ERASER -> {
-                    configurePaint()
-                    canvas.drawPath(currentPath, if (isEraser) eraserPaint else paint)
-                }
-                DrawTool.LINE -> {
-                    if (currentPoints.size >= 2) {
-                        val last = currentPoints.last()
-                        configurePreviewPaint()
-                        canvas.drawLine(startX, startY, last.x, last.y, previewPaint)
+
+        if (isReplayMode) {
+            // 回放模式：每帧重绘指定路径，不影响原始画布状态
+            canvas.drawRect(0f, 0f, CANVAS_SIZE.toFloat(), CANVAS_SIZE.toFloat(), backgroundPaint)
+            replayPaths.forEach { path ->
+                drawPathOnCanvas(canvas, path)
+            }
+        } else {
+            // 绘制缓存的bitmap
+            canvasBitmap?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+            
+            // 绘制当前正在绘制的路径
+            if (currentPoints.isNotEmpty()) {
+                when (currentTool) {
+                    DrawTool.BRUSH, DrawTool.ERASER -> {
+                        configurePaint()
+                        canvas.drawPath(currentPath, if (isEraser) eraserPaint else paint)
                     }
-                }
-                DrawTool.RECTANGLE -> {
-                    if (currentPoints.size >= 2) {
-                        val last = currentPoints.last()
-                        configurePreviewPaint()
-                        canvas.drawRect(
-                            minOf(startX, last.x), minOf(startY, last.y),
-                            maxOf(startX, last.x), maxOf(startY, last.y),
-                            previewPaint
-                        )
+                    DrawTool.LINE -> {
+                        if (currentPoints.size >= 2) {
+                            val last = currentPoints.last()
+                            configurePreviewPaint()
+                            canvas.drawLine(startX, startY, last.x, last.y, previewPaint)
+                        }
                     }
-                }
-                DrawTool.CIRCLE -> {
-                    if (currentPoints.size >= 2) {
-                        val last = currentPoints.last()
-                        val radius = sqrt(
-                            (last.x - startX) * (last.x - startX) +
-                            (last.y - startY) * (last.y - startY)
-                        )
-                        configurePreviewPaint()
-                        canvas.drawCircle(startX, startY, radius, previewPaint)
+                    DrawTool.RECTANGLE -> {
+                        if (currentPoints.size >= 2) {
+                            val last = currentPoints.last()
+                            configurePreviewPaint()
+                            canvas.drawRect(
+                                minOf(startX, last.x), minOf(startY, last.y),
+                                maxOf(startX, last.x), maxOf(startY, last.y),
+                                previewPaint
+                            )
+                        }
                     }
-                }
-                DrawTool.TEXT, DrawTool.PAN -> {
-                    // 文字工具在ACTION_UP时处理，PAN不绘制
+                    DrawTool.CIRCLE -> {
+                        if (currentPoints.size >= 2) {
+                            val last = currentPoints.last()
+                            val radius = sqrt(
+                                (last.x - startX) * (last.x - startX) +
+                                (last.y - startY) * (last.y - startY)
+                            )
+                            configurePreviewPaint()
+                            canvas.drawCircle(startX, startY, radius, previewPaint)
+                        }
+                    }
+                    DrawTool.TEXT, DrawTool.PAN -> {
+                        // 文字工具在ACTION_UP时处理，PAN不绘制
+                    }
                 }
             }
+            
+            // 绘制其他用户的光标
+            drawOtherCursors(canvas)
         }
-        
-        // 绘制其他用户的光标
-        drawOtherCursors(canvas)
         
         canvas.restore()
     }
     
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (isReadOnly || isReplayMode) {
+            return true
+        }
         // 始终处理缩放手势（双指缩放）
         scaleGestureDetector.onTouchEvent(event)
         
@@ -309,6 +331,14 @@ class DrawingCanvas @JvmOverloads constructor(
         
         currentPoints.add(PathPoint(x, y))
         
+        // 文字工具特殊处理：不创建路径，而是回调让UI层弹出输入框
+        if (currentTool == DrawTool.TEXT) {
+            onTextToolClicked?.invoke(startX, startY)
+            currentPoints.clear()
+            currentPath.reset()
+            return
+        }
+        
         // 创建DrawPath对象
         val drawPath = DrawPath(
             points = currentPoints.toList(),
@@ -393,6 +423,12 @@ class DrawingCanvas @JvmOverloads constructor(
     
     private fun drawPathToBitmap(drawPath: DrawPath, path: Path) {
         bitmapCanvas?.let { canvas ->
+            // 处理文字工具
+            if (drawPath.tool == DrawTool.TEXT && drawPath.text.isNotEmpty()) {
+                drawTextToBitmap(canvas, drawPath)
+                return@let
+            }
+            
             val pathPaint = if (drawPath.isEraser) {
                 eraserPaint.apply { strokeWidth = drawPath.strokeWidth }
             } else {
@@ -402,6 +438,45 @@ class DrawingCanvas @JvmOverloads constructor(
                 }
             }
             canvas.drawPath(path, pathPaint)
+        }
+    }
+
+    private fun drawPathOnCanvas(canvas: Canvas, drawPath: DrawPath) {
+        if (drawPath.tool == DrawTool.TEXT && drawPath.text.isNotEmpty()) {
+            drawTextToBitmap(canvas, drawPath)
+            return
+        }
+        
+        val path = createAndroidPath(drawPath)
+        val pathPaint = if (drawPath.isEraser) {
+            eraserPaint.apply { strokeWidth = drawPath.strokeWidth }
+        } else {
+            paint.apply {
+                color = drawPath.color
+                strokeWidth = drawPath.strokeWidth
+            }
+        }
+        canvas.drawPath(path, pathPaint)
+    }
+    
+    /**
+     * 绘制文字到Bitmap
+     */
+    private fun drawTextToBitmap(canvas: Canvas, drawPath: DrawPath) {
+        if (drawPath.points.isEmpty()) return
+        val position = drawPath.points.first()
+        
+        textPaint.apply {
+            color = drawPath.color
+            textSize = drawPath.fontSize
+        }
+        
+        // 绘制文字（可能包含换行）
+        val lines = drawPath.text.split("\n")
+        var y = position.y
+        lines.forEach { line ->
+            canvas.drawText(line, position.x, y, textPaint)
+            y += drawPath.fontSize * 1.2f  // 行间距
         }
     }
     
@@ -452,6 +527,32 @@ class DrawingCanvas @JvmOverloads constructor(
     fun setTool(tool: DrawTool) {
         currentTool = tool
         isEraser = tool == DrawTool.ERASER
+    }
+
+    /**
+     * 设置只读模式（禁用触摸）
+     */
+    fun setReadOnly(readOnly: Boolean) {
+        isReadOnly = readOnly
+    }
+
+    /**
+     * 设置回放模式
+     */
+    fun setReplayMode(enabled: Boolean) {
+        isReplayMode = enabled
+        if (!enabled) {
+            replayPaths = emptyList()
+        }
+        invalidate()
+    }
+
+    /**
+     * 设置回放路径
+     */
+    fun setReplayPaths(paths: List<DrawPath>) {
+        replayPaths = paths
+        invalidate()
     }
     
     /**
@@ -540,6 +641,37 @@ class DrawingCanvas @JvmOverloads constructor(
     }
     
     /**
+     * 添加文字路径（本地添加）
+     * @param x 文字位置X坐标（画布坐标）
+     * @param y 文字位置Y坐标（画布坐标）
+     * @param text 文字内容
+     * @param fontSize 字体大小
+     * @return 创建的DrawPath对象
+     */
+    fun addTextPath(x: Float, y: Float, text: String, fontSize: Float): DrawPath {
+        val drawPath = DrawPath(
+            points = listOf(PathPoint(x, y)),
+            color = currentColor,
+            strokeWidth = currentStrokeWidth,
+            tool = DrawTool.TEXT,
+            text = text,
+            fontSize = fontSize
+        )
+        
+        val androidPath = Path()  // 文字不需要Android Path
+        val pathWithAndroid = DrawPathWithAndroidPath(drawPath, androidPath)
+        
+        completedPaths.add(pathWithAndroid)
+        undoStack.add(pathWithAndroid)
+        redoStack.clear()
+        
+        drawPathToBitmap(drawPath, androidPath)
+        invalidate()
+        
+        return drawPath
+    }
+    
+    /**
      * 更新其他用户的光标位置
      */
     fun updateCursor(userId: String, x: Float, y: Float) {
@@ -599,5 +731,10 @@ class DrawingCanvas @JvmOverloads constructor(
         // 固定画布大小，确保所有设备使用相同坐标系（4000x4000 提供充足的绘画空间）
         const val CANVAS_SIZE = 4000
         private const val TOUCH_TOLERANCE = 4f
+    }
+
+    private val backgroundPaint = Paint().apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
     }
 }

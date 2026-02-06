@@ -233,6 +233,30 @@ class RoomRepository @Inject constructor(
     }
     
     /**
+     * 设置成员角色
+     */
+    suspend fun setMemberRole(roomId: String, userId: String, role: String): Result<Unit> {
+        return try {
+            // 获取当前 memberRoles
+            val room = getRoom(roomId).getOrThrow()
+            val updatedRoles = room.memberRoles.toMutableMap()
+            updatedRoles[userId] = role
+            
+            roomsCollection.document(roomId).update("memberRoles", updatedRoles).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 踢出成员
+     */
+    suspend fun kickMember(roomId: String, userId: String): Result<Unit> {
+        return leaveRoom(roomId, userId)
+    }
+    
+    /**
      * 搜索房间
      */
     suspend fun searchRooms(query: String): Result<List<Room>> {

@@ -5,9 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.sketchsync.data.model.DrawPath
 import com.sketchsync.data.model.DrawTool
 import com.sketchsync.data.model.Room
+import com.sketchsync.data.model.RoomRole
 import com.sketchsync.data.repository.AuthRepository
 import com.sketchsync.data.repository.DrawingRepository
 import com.sketchsync.data.repository.RoomRepository
+import com.sketchsync.util.ReplayManager
 import com.sketchsync.util.VoiceChatManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +28,8 @@ class CanvasViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val roomRepository: RoomRepository,
     private val drawingRepository: DrawingRepository,
-    private val voiceChatManager: VoiceChatManager
+    private val voiceChatManager: VoiceChatManager,
+    private val replayManager: ReplayManager
 ) : ViewModel() {
     
     // UI状态
@@ -40,6 +43,13 @@ class CanvasViewModel @Inject constructor(
     // 远程绘图路径
     private val _remotePaths = MutableStateFlow<List<DrawPath>>(emptyList())
     val remotePaths: StateFlow<List<DrawPath>> = _remotePaths.asStateFlow()
+
+    // 本地绘图路径（当前用户本次会话产生）
+    private val _localPaths = MutableStateFlow<List<DrawPath>>(emptyList())
+
+    // 所有绘图路径（用于回放）
+    private val _allPaths = MutableStateFlow<List<DrawPath>>(emptyList())
+    val allPaths: StateFlow<List<DrawPath>> = _allPaths.asStateFlow()
     
     // 其他用户光标
     private val _cursors = MutableStateFlow<Map<String, Pair<Float, Float>>>(emptyMap())
@@ -55,6 +65,11 @@ class CanvasViewModel @Inject constructor(
     
     // 当前用户信息
     val currentUserId: String? get() = authRepository.currentUserId
+    
+    // 回放相关状态
+    val replayState = replayManager.replayState
+    val replayProgress = replayManager.progress
+    val replayPathIds = replayManager.currentPathIds
     
     private var currentRoomId: String? = null
     private var currentUserName: String? = null
@@ -105,6 +120,8 @@ class CanvasViewModel @Inject constructor(
     private suspend fun loadExistingPaths(roomId: String) {
         drawingRepository.getAllPaths(roomId).onSuccess { paths ->
             _remotePaths.value = paths
+            _allPaths.value = paths
+            _localPaths.value = emptyList()
         }
     }
     
@@ -121,6 +138,7 @@ class CanvasViewModel @Inject constructor(
                     // 过滤掉自己发送的路径
                     if (path.userId != currentUserId) {
                         _remotePaths.value = _remotePaths.value + path
+                        _allPaths.value = appendPath(_allPaths.value, path)
                     }
                 }
         }
@@ -156,6 +174,8 @@ class CanvasViewModel @Inject constructor(
                     if (timestamp > joinTime) {
                         _clearEvent.value = timestamp
                         _remotePaths.value = emptyList()
+                        _localPaths.value = emptyList()
+                        _allPaths.value = emptyList()
                     }
                 }
         }
@@ -180,6 +200,10 @@ class CanvasViewModel @Inject constructor(
     fun sendPath(path: DrawPath) {
         val roomId = currentRoomId ?: return
         val userId = currentUserId ?: return
+        if (!canEdit()) {
+            _uiState.value = _uiState.value.copy(error = "当前角色为观看者，无法绘图")
+            return
+        }
         
         viewModelScope.launch {
             val userProfile = authRepository.getCurrentUserProfile().getOrNull()
@@ -187,6 +211,9 @@ class CanvasViewModel @Inject constructor(
                 userId = userId,
                 userName = userProfile?.displayName ?: "用户"
             )
+
+            _localPaths.value = _localPaths.value + pathWithUser
+            _allPaths.value = appendPath(_allPaths.value, pathWithUser)
             
             drawingRepository.sendDrawPath(roomId, pathWithUser)
         }
@@ -198,8 +225,10 @@ class CanvasViewModel @Inject constructor(
     fun updateCursor(x: Float, y: Float) {
         val roomId = currentRoomId ?: return
         val userId = currentUserId ?: return
-        
-        drawingRepository.updateCursorPosition(roomId, userId, x, y)
+
+        if (canEdit()) {
+            drawingRepository.updateCursorPosition(roomId, userId, x, y)
+        }
     }
     
     /**
@@ -207,10 +236,17 @@ class CanvasViewModel @Inject constructor(
      */
     fun clearCanvas() {
         val roomId = currentRoomId ?: return
+
+        if (!canEdit()) {
+            _uiState.value = _uiState.value.copy(error = "当前角色为观看者，无法清空画布")
+            return
+        }
         
         viewModelScope.launch {
             drawingRepository.clearCanvas(roomId).onSuccess {
                 _remotePaths.value = emptyList()
+                _localPaths.value = emptyList()
+                _allPaths.value = emptyList()
             }
         }
     }
@@ -357,6 +393,108 @@ class CanvasViewModel @Inject constructor(
      */
     fun clearMessage() {
         _uiState.value = _uiState.value.copy(message = null, error = null)
+    }
+    
+    /**
+     * 准备回放
+     */
+    fun startReplay() {
+        // 使用当前所有路径（包括本地和远程）
+        val paths = _allPaths.value
+        replayManager.prepare(paths)
+        replayManager.play(viewModelScope)
+    }
+    
+    /**
+     * 暂停回放
+     */
+    fun pauseReplay() {
+        replayManager.pause()
+    }
+    
+    /**
+     * 继续回放
+     */
+    fun resumeReplay() {
+        replayManager.play(viewModelScope)
+    }
+    
+    /**
+     * 停止回放
+     */
+    fun stopReplay() {
+        replayManager.stop()
+    }
+    
+    /**
+     * 跳转进度
+     */
+    fun seekReplay(progress: Float) {
+        replayManager.seekTo(progress)
+    }
+    
+    /**
+     * 设置成员角色
+     */
+    fun setMemberRole(userId: String, role: String) {
+        val roomId = currentRoomId ?: return
+        if (!isOwner()) {
+            _uiState.value = _uiState.value.copy(error = "只有房主可以修改成员权限")
+            return
+        }
+        viewModelScope.launch {
+            roomRepository.setMemberRole(roomId, userId, role)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(message = "设置成功")
+                    // 刷新房间信息
+                    roomRepository.getRoom(roomId).onSuccess { room ->
+                        _room.value = room
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
+                }
+        }
+    }
+    
+    /**
+     * 踢出成员
+     */
+    fun kickMember(userId: String) {
+        val roomId = currentRoomId ?: return
+        if (!isOwner()) {
+            _uiState.value = _uiState.value.copy(error = "只有房主可以踢出成员")
+            return
+        }
+        viewModelScope.launch {
+            roomRepository.kickMember(roomId, userId)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(message = "已踢出成员")
+                    // 刷新房间信息
+                    roomRepository.getRoom(roomId).onSuccess { room ->
+                        _room.value = room
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
+                }
+        }
+    }
+
+    private fun canEdit(): Boolean {
+        val userId = currentUserId ?: return false
+        val currentRoom = _room.value ?: return true
+        return currentRoom.getUserRole(userId) != RoomRole.VIEWER
+    }
+
+    private fun isOwner(): Boolean {
+        val userId = currentUserId ?: return false
+        val currentRoom = _room.value ?: return false
+        return currentRoom.getUserRole(userId) == RoomRole.OWNER
+    }
+
+    private fun appendPath(list: List<DrawPath>, path: DrawPath): List<DrawPath> {
+        return if (list.any { it.id == path.id }) list else list + path
     }
     
     override fun onCleared() {

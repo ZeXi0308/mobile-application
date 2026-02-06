@@ -17,7 +17,10 @@ data class DrawPath(
     val userId: String = "",
     val userName: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val isEraser: Boolean = false
+    val isEraser: Boolean = false,
+    // 文字工具相关字段
+    val text: String = "",
+    val fontSize: Float = 48f
 ) {
     /**
      * 转换为Firebase可存储的Map格式
@@ -31,7 +34,9 @@ data class DrawPath(
         "userId" to userId,
         "userName" to userName,
         "timestamp" to timestamp,
-        "isEraser" to isEraser
+        "isEraser" to isEraser,
+        "text" to text,
+        "fontSize" to fontSize
     )
     
     companion object {
@@ -61,7 +66,9 @@ data class DrawPath(
                 userId = map["userId"] as? String ?: "",
                 userName = map["userName"] as? String ?: "",
                 timestamp = (map["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-                isEraser = map["isEraser"] as? Boolean ?: false
+                isEraser = map["isEraser"] as? Boolean ?: false,
+                text = map["text"] as? String ?: "",
+                fontSize = (map["fontSize"] as? Number)?.toFloat() ?: 48f
             )
         }
     }

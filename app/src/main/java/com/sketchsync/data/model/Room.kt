@@ -20,8 +20,25 @@ data class Room(
     val participantNames: Map<String, String> = emptyMap(),
     val isActive: Boolean = true,
     val lastActivity: Long = System.currentTimeMillis(),
-    val gameMode: GameMode = GameMode.FREE_DRAW
+    val gameMode: GameMode = GameMode.FREE_DRAW,
+    // 成员角色映射 (userId -> role)
+    val memberRoles: Map<String, String> = emptyMap()
 ) {
+    /**
+     * 获取用户角色
+     */
+    fun getUserRole(userId: String): RoomRole {
+        return when {
+            userId == creatorId -> RoomRole.OWNER
+            memberRoles[userId] != null -> try {
+                RoomRole.valueOf(memberRoles[userId]!!)
+            } catch (e: Exception) {
+                RoomRole.EDITOR
+            }
+            else -> RoomRole.EDITOR  // 默认为编辑者
+        }
+    }
+    
     /**
      * 转换为Firebase可存储的Map格式
      */
@@ -38,7 +55,8 @@ data class Room(
         "participantNames" to participantNames,
         "isActive" to isActive,
         "lastActivity" to lastActivity,
-        "gameMode" to gameMode.name
+        "gameMode" to gameMode.name,
+        "memberRoles" to memberRoles
     )
     
     companion object {
@@ -64,7 +82,8 @@ data class Room(
                     GameMode.valueOf(map["gameMode"] as? String ?: "FREE_DRAW")
                 } catch (e: Exception) {
                     GameMode.FREE_DRAW
-                }
+                },
+                memberRoles = map["memberRoles"] as? Map<String, String> ?: emptyMap()
             )
         }
     }
@@ -76,6 +95,15 @@ data class Room(
 enum class GameMode {
     FREE_DRAW,    // 自由绘画
     PICTIONARY    // 你画我猜
+}
+
+/**
+ * 房间成员角色
+ */
+enum class RoomRole {
+    OWNER,     // 房主：完全控制
+    EDITOR,    // 编辑者：可绘图
+    VIEWER     // 观看者：只读
 }
 
 /**
