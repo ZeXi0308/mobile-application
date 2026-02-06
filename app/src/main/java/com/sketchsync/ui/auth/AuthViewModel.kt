@@ -6,6 +6,7 @@ import com.sketchsync.data.model.AuthState
 import com.sketchsync.data.model.User
 import com.sketchsync.data.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,8 @@ class AuthViewModel @Inject constructor(
     // UI状态
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+
+    private var authStateJob: Job? = null
     
     init {
         checkAuthState()
@@ -37,21 +40,11 @@ class AuthViewModel @Inject constructor(
      * 检查认证状态
      */
     private fun checkAuthState() {
-        viewModelScope.launch {
+        if (authStateJob?.isActive == true) return
+        authStateJob = viewModelScope.launch {
             authRepository.observeAuthState().collect { firebaseUser ->
                 if (firebaseUser != null) {
-                    val profileResult = authRepository.getUserProfile(firebaseUser.uid)
-                    if (profileResult.isSuccess) {
-                        _authState.value = AuthState.Authenticated(profileResult.getOrThrow())
-                    } else {
-                        // 用户已验证但没有资料，创建默认资料
-                        val user = User(
-                            uid = firebaseUser.uid,
-                            email = firebaseUser.email ?: "",
-                            displayName = firebaseUser.displayName ?: "用户${firebaseUser.uid.take(6)}"
-                        )
-                        _authState.value = AuthState.Authenticated(user)
-                    }
+                    refreshUserProfile(firebaseUser.uid, firebaseUser.email, firebaseUser.displayName)
                 } else {
                     _authState.value = AuthState.Unauthenticated
                 }
@@ -163,9 +156,9 @@ class AuthViewModel @Inject constructor(
      */
     fun updateProfile(displayName: String) {
         val userId = authRepository.currentUserId ?: return
-        
+
         _uiState.value = _uiState.value.copy(isLoading = true)
-        
+
         viewModelScope.launch {
             authRepository.updateUserProfile(userId, displayName)
                 .onSuccess {
@@ -173,8 +166,8 @@ class AuthViewModel @Inject constructor(
                         isLoading = false,
                         message = "资料更新成功"
                     )
-                    // 刷新用户信息
-                    checkAuthState()
+                    // 单次刷新用户信息，避免重复订阅
+                    refreshUserProfile(userId, null, null)
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
@@ -182,6 +175,24 @@ class AuthViewModel @Inject constructor(
                         error = "更新失败: ${e.message}"
                     )
                 }
+        }
+    }
+
+    private suspend fun refreshUserProfile(
+        userId: String,
+        email: String?,
+        displayName: String?
+    ) {
+        val profileResult = authRepository.getUserProfile(userId)
+        if (profileResult.isSuccess) {
+            _authState.value = AuthState.Authenticated(profileResult.getOrThrow())
+        } else {
+            val fallbackUser = User(
+                uid = userId,
+                email = email ?: "",
+                displayName = displayName ?: "用户${userId.take(6)}"
+            )
+            _authState.value = AuthState.Authenticated(fallbackUser)
         }
     }
     
