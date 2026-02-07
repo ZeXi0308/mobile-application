@@ -9,8 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -361,29 +359,13 @@ fun CanvasScreen(
                 
                 // 回放控制条
                 if (isReplaying) {
-                    val sliderInteraction = remember { MutableInteractionSource() }
-                    val isDragging by sliderInteraction.collectIsPressedAsState()
                     var sliderValue by remember { mutableFloatStateOf(replayProgress) }
+                    var isUserSeeking by remember { mutableStateOf(false) }
                     var wasPlayingBeforeDrag by remember { mutableStateOf(false) }
 
-                    LaunchedEffect(replayProgress, isDragging) {
-                        if (!isDragging) {
+                    LaunchedEffect(replayProgress, isUserSeeking) {
+                        if (!isUserSeeking) {
                             sliderValue = replayProgress
-                        }
-                    }
-
-                    LaunchedEffect(isDragging) {
-                        if (isDragging) {
-                            if (replayState == ReplayState.PLAYING) {
-                                wasPlayingBeforeDrag = true
-                                viewModel.pauseReplay()
-                            }
-                        } else {
-                            viewModel.seekReplay(sliderValue)
-                            if (wasPlayingBeforeDrag) {
-                                viewModel.resumeReplay()
-                                wasPlayingBeforeDrag = false
-                            }
                         }
                     }
 
@@ -398,13 +380,24 @@ fun CanvasScreen(
                             Slider(
                                 value = sliderValue,
                                 onValueChange = { value ->
+                                    if (!isUserSeeking) {
+                                        isUserSeeking = true
+                                        if (replayState == ReplayState.PLAYING) {
+                                            wasPlayingBeforeDrag = true
+                                            viewModel.pauseReplay()
+                                        }
+                                    }
                                     sliderValue = value
-                                    if (isDragging) {
-                                        viewModel.seekReplay(value)
+                                    viewModel.seekReplay(value)
+                                },
+                                onValueChangeFinished = {
+                                    isUserSeeking = false
+                                    if (wasPlayingBeforeDrag) {
+                                        viewModel.resumeReplay()
+                                        wasPlayingBeforeDrag = false
                                     }
                                 },
-                                modifier = Modifier.fillMaxWidth(),
-                                interactionSource = sliderInteraction
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
