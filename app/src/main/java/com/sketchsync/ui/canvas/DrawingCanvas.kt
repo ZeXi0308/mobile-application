@@ -216,18 +216,44 @@ class DrawingCanvas @JvmOverloads constructor(
     }
     
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // 回放模式下不处理触摸，让上层控件（如回放条）接管
-        if (isReplayMode) {
-            return false
-        }
-        if (isReadOnly) {
-            return true
-        }
         // 始终处理缩放手势（双指缩放）
         scaleGestureDetector.onTouchEvent(event)
         
         // 如果正在缩放，不处理其他手势
         if (scaleGestureDetector.isInProgress) {
+            return true
+        }
+
+        // 回放模式下允许平移/缩放，但不允许绘制
+        if (isReplayMode) {
+            val x = event.x
+            val y = event.y
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastPanX = x
+                    lastPanY = y
+                    isPanning = true
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (isPanning) {
+                        translateX += x - lastPanX
+                        translateY += y - lastPanY
+                        lastPanX = x
+                        lastPanY = y
+                        invalidate()
+                    }
+                    return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    isPanning = false
+                    return true
+                }
+            }
+            return true
+        }
+
+        if (isReadOnly) {
             return true
         }
         
