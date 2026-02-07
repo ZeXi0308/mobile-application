@@ -71,6 +71,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.material.icons.filled.Cancel
@@ -314,7 +315,9 @@ fun CanvasScreen(
                     .background(Color.White)
             ) {
                 AndroidView(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(0f),
                     factory = { ctx ->
                         DrawingCanvas(ctx).apply {
                             drawingCanvas = this
@@ -373,7 +376,8 @@ fun CanvasScreen(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(16.dp)
-                            .fillMaxWidth(0.9f),
+                            .fillMaxWidth(0.9f)
+                            .zIndex(1f),
                         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f))
                     ) {
                         Column(modifier = Modifier.padding(8.dp)) {
