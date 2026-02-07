@@ -348,6 +348,13 @@ class CanvasViewModel @Inject constructor(
     fun setStrokeWidth(width: Float) {
         _uiState.value = _uiState.value.copy(currentStrokeWidth = width)
     }
+
+    /**
+     * 设置橡皮擦大小
+     */
+    fun setEraserWidth(width: Float) {
+        _uiState.value = _uiState.value.copy(currentEraserWidth = width)
+    }
     
     /**
      * 导出画布
@@ -523,6 +530,7 @@ data class CanvasUiState(
     val currentTool: DrawTool = DrawTool.BRUSH,
     val currentColor: Int = android.graphics.Color.BLACK,
     val currentStrokeWidth: Float = 8f,
+    val currentEraserWidth: Float = 24f,
     val isVoiceEnabled: Boolean = false,
     val isVoiceConnecting: Boolean = false,
     val isMuted: Boolean = false,

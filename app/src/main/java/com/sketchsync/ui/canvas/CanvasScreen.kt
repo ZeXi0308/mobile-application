@@ -321,6 +321,7 @@ fun CanvasScreen(
                             setTool(uiState.currentTool)
                             setColor(uiState.currentColor)
                             setStrokeWidth(uiState.currentStrokeWidth)
+                            setEraserWidth(uiState.currentEraserWidth)
                             setReadOnly(isViewer || isReplaying)
                             setReplayMode(isReplaying)
                             
@@ -342,6 +343,7 @@ fun CanvasScreen(
                         canvas.setTool(uiState.currentTool)
                         canvas.setColor(uiState.currentColor)
                         canvas.setStrokeWidth(uiState.currentStrokeWidth)
+                        canvas.setEraserWidth(uiState.currentEraserWidth)
                         canvas.setReadOnly(isViewer || isReplaying)
                         canvas.setReplayMode(isReplaying)
                     }
@@ -426,11 +428,18 @@ fun CanvasScreen(
         
         // 画笔粗细滑块
         if (showStrokeSlider) {
+            val isEraserTool = uiState.currentTool == DrawTool.ERASER
             StrokeSliderDialog(
-                currentWidth = uiState.currentStrokeWidth,
+                title = if (isEraserTool) "橡皮大小" else "画笔粗细",
+                currentWidth = if (isEraserTool) uiState.currentEraserWidth else uiState.currentStrokeWidth,
                 onWidthChanged = { width ->
-                    viewModel.setStrokeWidth(width)
-                    drawingCanvas?.setStrokeWidth(width)
+                    if (isEraserTool) {
+                        viewModel.setEraserWidth(width)
+                        drawingCanvas?.setEraserWidth(width)
+                    } else {
+                        viewModel.setStrokeWidth(width)
+                        drawingCanvas?.setStrokeWidth(width)
+                    }
                 },
                 onDismiss = { showStrokeSlider = false }
             )
@@ -819,6 +828,7 @@ fun ColorPickerDialog(
  */
 @Composable
 fun StrokeSliderDialog(
+    title: String,
     currentWidth: Float,
     onWidthChanged: (Float) -> Unit,
     onDismiss: () -> Unit
@@ -827,7 +837,7 @@ fun StrokeSliderDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("画笔粗细") },
+        title = { Text(title) },
         text = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally

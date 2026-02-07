@@ -45,6 +45,8 @@ class ReplayManager @Inject constructor() {
     
     // 回放Job
     private var replayJob: Job? = null
+    private var replayScope: CoroutineScope? = null
+    private var currentSpeed = 1.0f
     
     // 回放控制参数
     private var startIndex = 0
@@ -90,6 +92,8 @@ class ReplayManager @Inject constructor() {
     fun play(scope: CoroutineScope, speed: Float = 1.0f) {
         if (allPaths.isEmpty() || _replayState.value == ReplayState.PLAYING) return
         
+        replayScope = scope
+        currentSpeed = speed
         _replayState.value = ReplayState.PLAYING
         val firstTimestamp = allPaths.first().timestamp
         
@@ -111,11 +115,7 @@ class ReplayManager @Inject constructor() {
                 val currentTimeThreshold = firstTimestamp + currentDuration
                 val pathsToShow = allPaths.filter { it.timestamp <= currentTimeThreshold }
                 val pathIds = pathsToShow.map { it.id }.toSet()
-                
-                // 只有当显示的路径集合发生变化时才更新
-                if (pathIds.size != _currentPathIds.value.size) {
-                    _currentPathIds.value = pathIds
-                }
+                _currentPathIds.value = pathIds
                 
                 if (currentDuration >= totalDuration) {
                     _replayState.value = ReplayState.COMPLETED
@@ -167,6 +167,12 @@ class ReplayManager @Inject constructor() {
         
         _currentPathIds.value = pathsToShow.map { it.id }.toSet()
         
+        if (_replayState.value == ReplayState.PLAYING) {
+            replayJob?.cancel()
+            _replayState.value = ReplayState.PAUSED
+            replayScope?.let { play(it, currentSpeed) }
+        }
+
         if (_replayState.value == ReplayState.COMPLETED && targetProgress < 1f) {
             _replayState.value = ReplayState.PAUSED
         }

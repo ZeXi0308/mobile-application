@@ -35,6 +35,7 @@ class DrawingCanvas @JvmOverloads constructor(
     private var currentTool: DrawTool = DrawTool.BRUSH
     private var currentColor: Int = Color.BLACK
     private var currentStrokeWidth: Float = 8f
+    private var currentEraserWidth: Float = 24f
     private var isEraser: Boolean = false
     private var isReadOnly: Boolean = false
     private var isReplayMode: Boolean = false
@@ -340,10 +341,11 @@ class DrawingCanvas @JvmOverloads constructor(
         }
         
         // 创建DrawPath对象
+        val strokeWidth = if (currentTool == DrawTool.ERASER) currentEraserWidth else currentStrokeWidth
         val drawPath = DrawPath(
             points = currentPoints.toList(),
             color = currentColor,
-            strokeWidth = currentStrokeWidth,
+            strokeWidth = strokeWidth,
             tool = currentTool,
             isEraser = isEraser
         )
@@ -490,7 +492,7 @@ class DrawingCanvas @JvmOverloads constructor(
     private fun configurePaint() {
         paint.color = currentColor
         paint.strokeWidth = currentStrokeWidth
-        eraserPaint.strokeWidth = currentStrokeWidth
+        eraserPaint.strokeWidth = currentEraserWidth
     }
     
     private fun configurePreviewPaint() {
@@ -584,6 +586,13 @@ class DrawingCanvas @JvmOverloads constructor(
      */
     fun setStrokeWidth(width: Float) {
         currentStrokeWidth = width
+    }
+
+    /**
+     * 设置橡皮擦大小
+     */
+    fun setEraserWidth(width: Float) {
+        currentEraserWidth = width
     }
     
     /**
