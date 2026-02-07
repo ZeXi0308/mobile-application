@@ -1,6 +1,7 @@
 package com.sketchsync.ui.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +19,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -57,6 +57,7 @@ import com.sketchsync.data.model.User
 import com.sketchsync.ui.auth.AuthViewModel
 import com.sketchsync.ui.theme.PrimaryBlue
 import com.sketchsync.ui.theme.PrimaryBlueLight
+import com.sketchsync.ui.theme.ThemeMode
 
 /**
  * 用户资料页面
@@ -67,13 +68,16 @@ fun ProfileScreen(
     viewModel: AuthViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToGallery: () -> Unit,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    currentTheme: ThemeMode,
+    onThemeChange: (ThemeMode) -> Unit
 ) {
     val authState by viewModel.authState.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     
     var showEditDialog by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
     
     val user = (authState as? AuthState.Authenticated)?.user
     
@@ -169,8 +173,8 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon = Icons.Default.Palette,
                     title = "主题设置",
-                    subtitle = "深色模式、颜色主题",
-                    onClick = { /* TODO */ }
+                    subtitle = if (currentTheme == ThemeMode.DAY) "白天模式" else "深夜模式",
+                    onClick = { showThemeDialog = true }
                 )
                 
                 // 设置
@@ -178,14 +182,6 @@ fun ProfileScreen(
                     icon = Icons.Default.Settings,
                     title = "设置",
                     subtitle = "通知、隐私设置",
-                    onClick = { /* TODO */ }
-                )
-                
-                // 关于
-                ProfileMenuItem(
-                    icon = Icons.Default.Info,
-                    title = "关于",
-                    subtitle = "版本 1.0.0",
                     onClick = { /* TODO */ }
                 )
                 
@@ -247,6 +243,62 @@ fun ProfileScreen(
                 }
             )
         }
+
+        if (showThemeDialog) {
+            AlertDialog(
+                onDismissRequest = { showThemeDialog = false },
+                title = { Text("主题设置") },
+                text = {
+                    Column {
+                        ThemeOptionRow(
+                            selected = currentTheme == ThemeMode.DAY,
+                            label = "白天模式",
+                            onClick = {
+                                onThemeChange(ThemeMode.DAY)
+                                showThemeDialog = false
+                            }
+                        )
+                        ThemeOptionRow(
+                            selected = currentTheme == ThemeMode.NIGHT,
+                            label = "深夜模式",
+                            onClick = {
+                                onThemeChange(ThemeMode.NIGHT)
+                                showThemeDialog = false
+                            }
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showThemeDialog = false }) {
+                        Text("关闭")
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThemeOptionRow(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .clickable { onClick() },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        androidx.compose.material3.RadioButton(
+            selected = selected,
+            onClick = onClick
+        )
+        Text(
+            text = label,
+            modifier = Modifier.padding(start = 8.dp)
+        )
     }
 }
 

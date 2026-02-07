@@ -18,12 +18,16 @@ import com.sketchsync.ui.gallery.GalleryScreen
 import com.sketchsync.ui.profile.ProfileScreen
 import com.sketchsync.ui.room.RoomListScreen
 import com.sketchsync.ui.splash.SplashScreen
+import com.sketchsync.ui.theme.ThemeMode
 
 /**
  * 应用导航
  */
 @Composable
-fun SketchSyncNavigation() {
+fun SketchSyncNavigation(
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit
+) {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.authState.collectAsState()
@@ -124,7 +128,9 @@ fun SketchSyncNavigation() {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(Screen.RoomList.route) { inclusive = true }
                     }
-                }
+                },
+                currentTheme = themeMode,
+                onThemeChange = onThemeModeChange
             )
         }
         
