@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.roundToInt
 
 /**
  * 回放状态
@@ -48,19 +49,17 @@ class ReplayManager @Inject constructor() {
     private var replayScope: CoroutineScope? = null
     private var currentSpeed = 1.0f
     
-    // 回放控制参数
-    private var startIndex = 0
-    private var totalDuration = 0L
-    private var currentDuration = 0L
-    private val frameRate = 16L // ~60fps
-    private var startTime = 0L
+    // 回放控制参数（按笔画顺序）
+    private var currentIndex = 0
+    private var totalCount = 0
+    private val stepIntervalMs = 120L
     
     /**
      * 准备回放
      */
     fun prepare(paths: List<DrawPath>) {
-        // 按时间戳排序
-        allPaths = paths.sortedBy { it.timestamp }
+        // 按笔画顺序回放（不使用时间轴）
+        allPaths = paths
         
         if (allPaths.isEmpty()) {
             _replayState.value = ReplayState.IDLE
@@ -69,15 +68,8 @@ class ReplayManager @Inject constructor() {
             return
         }
         
-        // 计算总时长
-        val firstTimestamp = allPaths.first().timestamp
-        val lastTimestamp = allPaths.last().timestamp
-        totalDuration = lastTimestamp - firstTimestamp
-        // 如果时长太短，至少保证有1秒
-        if (totalDuration < 1000) totalDuration = 1000
-            
-        startIndex = 0
-        currentDuration = 0
+        totalCount = allPaths.size
+        currentIndex = 0
         
         _replayState.value = ReplayState.PAUSED
         _progress.value = 0f
@@ -95,37 +87,31 @@ class ReplayManager @Inject constructor() {
         replayScope = scope
         currentSpeed = speed
         _replayState.value = ReplayState.PLAYING
-        val firstTimestamp = allPaths.first().timestamp
-        
+
+        if (totalCount <= 1) {
+            _currentPathIds.value = allPaths.map { it.id }.toSet()
+            _progress.value = 1f
+            _replayState.value = ReplayState.COMPLETED
+            return
+        }
+
+        if (currentIndex >= totalCount) {
+            currentIndex = 0
+            _currentPathIds.value = emptySet()
+            _progress.value = 0f
+        } else {
+            updateReplayFrame()
+        }
+
         replayJob = scope.launch(Dispatchers.Default) {
-            val startSystemTime = System.currentTimeMillis()
-            val startReplayTime = currentDuration
-            
-            while (currentDuration < totalDuration) {
-                // 计算当前应该播放到的时间点
-                val elapsedSystemTime = System.currentTimeMillis() - startSystemTime
-                currentDuration = startReplayTime + (elapsedSystemTime * speed).toLong()
-                
-                if (currentDuration > totalDuration) currentDuration = totalDuration
-                
-                // 更新进度
-                _progress.value = currentDuration.toFloat() / totalDuration
-                
-                // 找出当前时间点之前的所有路径
-                val currentTimeThreshold = firstTimestamp + currentDuration
-                val pathsToShow = allPaths.filter { it.timestamp <= currentTimeThreshold }
-                val pathIds = pathsToShow.map { it.id }.toSet()
-                _currentPathIds.value = pathIds
-                
-                if (currentDuration >= totalDuration) {
-                    _replayState.value = ReplayState.COMPLETED
-                    // 确保显示所有路径
-                    _currentPathIds.value = allPaths.map { it.id }.toSet()
-                    break
-                }
-                
-                delay(frameRate)
+            while (currentIndex < totalCount - 1) {
+                delay((stepIntervalMs / speed).toLong().coerceAtLeast(16L))
+                currentIndex++
+                updateReplayFrame()
             }
+            _replayState.value = ReplayState.COMPLETED
+            _currentPathIds.value = allPaths.map { it.id }.toSet()
+            _progress.value = 1f
         }
     }
     
@@ -147,8 +133,7 @@ class ReplayManager @Inject constructor() {
         _replayState.value = ReplayState.IDLE
         _progress.value = 0f
         _currentPathIds.value = emptySet() // IDLE状态下不显示回放路径（由原来的逻辑接管）
-        currentDuration = 0
-        startIndex = 0
+        currentIndex = 0
     }
     
     /**
@@ -158,14 +143,8 @@ class ReplayManager @Inject constructor() {
         if (allPaths.isEmpty()) return
         
         val targetProgress = progress.coerceIn(0f, 1f)
-        _progress.value = targetProgress
-        currentDuration = (totalDuration * targetProgress).toLong()
-        
-        val firstTimestamp = allPaths.first().timestamp
-        val currentTimeThreshold = firstTimestamp + currentDuration
-        val pathsToShow = allPaths.filter { it.timestamp <= currentTimeThreshold }
-        
-        _currentPathIds.value = pathsToShow.map { it.id }.toSet()
+        currentIndex = ((totalCount - 1) * targetProgress).roundToInt().coerceIn(0, totalCount - 1)
+        updateReplayFrame()
         
         if (_replayState.value == ReplayState.PLAYING) {
             replayJob?.cancel()
@@ -176,5 +155,16 @@ class ReplayManager @Inject constructor() {
         if (_replayState.value == ReplayState.COMPLETED && targetProgress < 1f) {
             _replayState.value = ReplayState.PAUSED
         }
+    }
+
+    private fun updateReplayFrame() {
+        val count = totalCount
+        if (count <= 0) {
+            _progress.value = 0f
+            _currentPathIds.value = emptySet()
+            return
+        }
+        _progress.value = if (count <= 1) 1f else currentIndex.toFloat() / (count - 1).toFloat()
+        _currentPathIds.value = allPaths.take(currentIndex + 1).map { it.id }.toSet()
     }
 }
