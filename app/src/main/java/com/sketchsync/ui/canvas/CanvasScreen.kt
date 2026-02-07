@@ -349,7 +349,7 @@ fun CanvasScreen(
                     }
                 )
                 
-                if (isViewer || isReplaying) {
+                if (isViewer) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
