@@ -216,7 +216,11 @@ class DrawingCanvas @JvmOverloads constructor(
     }
     
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (isReadOnly || isReplayMode) {
+        // 回放模式下不处理触摸，让上层控件（如回放条）接管
+        if (isReplayMode) {
+            return false
+        }
+        if (isReadOnly) {
             return true
         }
         // 始终处理缩放手势（双指缩放）
