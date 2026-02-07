@@ -148,7 +148,7 @@ class CanvasViewModel @Inject constructor(
                 .collect { path ->
                     // 过滤掉自己发送的路径
                     if (path.userId != currentUserId) {
-                        _remotePaths.value = _remotePaths.value + path
+                        _remotePaths.value = appendPath(_remotePaths.value, path)
                         _allPaths.value = appendPath(_allPaths.value, path)
                     }
                 }
