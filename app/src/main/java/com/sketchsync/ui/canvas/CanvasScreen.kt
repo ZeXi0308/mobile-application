@@ -9,6 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -359,6 +361,32 @@ fun CanvasScreen(
                 
                 // 回放控制条
                 if (isReplaying) {
+                    val sliderInteraction = remember { MutableInteractionSource() }
+                    val isDragging by sliderInteraction.collectIsPressedAsState()
+                    var sliderValue by remember { mutableFloatStateOf(replayProgress) }
+                    var wasPlayingBeforeDrag by remember { mutableStateOf(false) }
+
+                    LaunchedEffect(replayProgress, isDragging) {
+                        if (!isDragging) {
+                            sliderValue = replayProgress
+                        }
+                    }
+
+                    LaunchedEffect(isDragging) {
+                        if (isDragging) {
+                            if (replayState == ReplayState.PLAYING) {
+                                wasPlayingBeforeDrag = true
+                                viewModel.pauseReplay()
+                            }
+                        } else {
+                            viewModel.seekReplay(sliderValue)
+                            if (wasPlayingBeforeDrag) {
+                                viewModel.resumeReplay()
+                                wasPlayingBeforeDrag = false
+                            }
+                        }
+                    }
+
                     Card(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -368,9 +396,15 @@ fun CanvasScreen(
                     ) {
                         Column(modifier = Modifier.padding(8.dp)) {
                             Slider(
-                                value = replayProgress,
-                                onValueChange = { viewModel.seekReplay(it) },
-                                modifier = Modifier.fillMaxWidth()
+                                value = sliderValue,
+                                onValueChange = { value ->
+                                    sliderValue = value
+                                    if (isDragging) {
+                                        viewModel.seekReplay(value)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                interactionSource = sliderInteraction
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
